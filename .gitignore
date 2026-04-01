@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.env
+*.env
+
+# Node
+node_modules/
+.env.local
+
+# Archives
+*.zip
+
+# Claude
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db

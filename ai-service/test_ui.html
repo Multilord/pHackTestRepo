@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HomeGrow AI — Dev Test Console</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --forest:   #0d1f0d;
+      --canopy:   #162716;
+      --moss:     #1e3a1e;
+      --leaf:     #2e5c2e;
+      --sage:     #5a8f5a;
+      --lime:     #8fc98f;
+      --cream:    #f0e8d0;
+      --parchment:#d9cdb0;
+      --amber:    #c9963a;
+      --amber-lt: #e8b84b;
+      --red:      #c0392b;
+      --yellow:   #d4a017;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--forest);
+      color: var(--cream);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      min-height: 100vh;
+      background-image:
+        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(46,92,46,0.35) 0%, transparent 70%),
+        url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232e5c2e' fill-opacity='0.07'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+
+    /* grain overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    .content { position: relative; z-index: 1; }
+
+    h1, h2, h3, .serif { font-family: 'Playfair Display', serif; }
+
+    /* ── Tabs ── */
+    .tab-btn {
+      padding: 0.6rem 1.8rem;
+      border-radius: 8px 8px 0 0;
+      font-size: 0.9rem;
+      font-family: 'DM Sans', sans-serif;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid var(--leaf);
+      border-bottom: none;
+      background: var(--canopy);
+      color: var(--sage);
+      transition: all 0.2s ease;
+    }
+    .tab-btn.active {
+      background: var(--moss);
+      color: var(--cream);
+      border-color: var(--sage);
+    }
+    .tab-btn:hover:not(.active) { background: var(--moss); color: var(--parchment); }
+
+    /* ── Card ── */
+    .card {
+      background: var(--canopy);
+      border: 1px solid var(--leaf);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+
+    /* ── Form Elements ── */
+    label { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--parchment); display: block; margin-bottom: 0.3rem; }
+    input, select, textarea {
+      width: 100%;
+      background: var(--forest);
+      border: 1px solid var(--leaf);
+      border-radius: 8px;
+      color: var(--cream);
+      padding: 0.55rem 0.85rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: var(--sage); }
+    select option { background: var(--forest); }
+    textarea { resize: vertical; }
+
+    /* ── Button ── */
+    .btn-primary {
+      background: linear-gradient(135deg, var(--leaf) 0%, var(--sage) 100%);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.7rem 2rem;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(0); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ── Plant Card ── */
+    .plant-card {
+      background: var(--moss);
+      border: 1px solid var(--leaf);
+      border-radius: 14px;
+      overflow: hidden;
+      animation: fadeUp 0.4s ease both;
+    }
+    .plant-card:nth-child(2) { animation-delay: 0.07s; }
+    .plant-card:nth-child(3) { animation-delay: 0.14s; }
+    .plant-card:nth-child(4) { animation-delay: 0.21s; }
+    .plant-card:nth-child(5) { animation-delay: 0.28s; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Stat pill ── */
+    .stat-pill {
+      background: var(--forest);
+      border: 1px solid var(--leaf);
+      border-radius: 6px;
+      padding: 0.35rem 0.65rem;
+      font-size: 0.76rem;
+    }
+    .stat-label { color: var(--sage); display: block; font-size: 0.68rem; letter-spacing: 0.07em; text-transform: uppercase; }
+
+    /* ── Success bar ── */
+    .success-bar-track {
+      background: var(--forest);
+      border-radius: 999px;
+      height: 6px;
+      overflow: hidden;
+    }
+    .success-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--sage), var(--lime));
+      transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
+    }
+
+    /* ── Confidence bar ── */
+    .conf-bar-track {
+      background: var(--forest);
+      border-radius: 999px;
+      height: 10px;
+      overflow: hidden;
+    }
+    .conf-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 1s cubic-bezier(0.4,0,0.2,1);
+    }
+    .conf-high  { background: linear-gradient(90deg, #2e7d32, #66bb6a); }
+    .conf-mid   { background: linear-gradient(90deg, #e65100, #ffa726); }
+    .conf-low   { background: linear-gradient(90deg, #b71c1c, #ef5350); }
+
+    /* ── Badge ── */
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.7rem;
+      border-radius: 999px;
+      font-size: 0.73rem;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .badge-green  { background: rgba(94,160,94,0.18); color: var(--lime); border: 1px solid rgba(94,160,94,0.3); }
+    .badge-amber  { background: rgba(201,150,58,0.18); color: var(--amber-lt); border: 1px solid rgba(201,150,58,0.3); }
+    .badge-red    { background: rgba(192,57,43,0.18); color: #ef9a9a; border: 1px solid rgba(192,57,43,0.3); }
+    .badge-blue   { background: rgba(41,182,246,0.12); color: #81d4fa; border: 1px solid rgba(41,182,246,0.25); }
+    .badge-purple { background: rgba(186,104,200,0.15); color: #ce93d8; border: 1px solid rgba(186,104,200,0.3); }
+
+    /* ── Calendar accordion ── */
+    .calendar-toggle { cursor: pointer; user-select: none; }
+    .calendar-body   { display: none; margin-top: 0.75rem; }
+    .calendar-body.open { display: block; }
+    .cal-entry { border-left: 2px solid var(--sage); padding-left: 0.85rem; margin-bottom: 0.85rem; }
+    .cal-week  { font-size: 0.72rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--sage); }
+    .cal-title { font-weight: 500; font-size: 0.88rem; color: var(--cream); }
+    .cal-desc  { font-size: 0.82rem; color: var(--parchment); margin-top: 0.15rem; }
+
+    /* ── Image preview ── */
+    #img-preview {
+      max-height: 220px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1px solid var(--leaf);
+      width: 100%;
+      display: none;
+    }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid var(--leaf);
+      border-top-color: var(--sage);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      margin: 0 auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Error box ── */
+    .error-box {
+      background: rgba(192,57,43,0.12);
+      border: 1px solid rgba(192,57,43,0.4);
+      border-radius: 8px;
+      padding: 1rem;
+      color: #ef9a9a;
+      font-size: 0.88rem;
+      animation: fadeUp 0.3s ease;
+    }
+
+    /* ── Warning banner ── */
+    .warn-banner {
+      background: rgba(201,150,58,0.15);
+      border: 1px solid rgba(201,150,58,0.4);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      color: var(--amber-lt);
+      font-size: 0.84rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* ── Divider ── */
+    .divider { border-color: var(--leaf); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--forest); }
+    ::-webkit-scrollbar-thumb { background: var(--leaf); border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div class="content max-w-4xl mx-auto px-4 py-8">
+
+  <!-- ── Header ── -->
+  <div class="text-center mb-8">
+    <div class="text-5xl mb-2">🌿</div>
+    <h1 class="text-3xl font-bold tracking-tight" style="font-family:'Playfair Display',serif;">HomeGrow <em>AI</em></h1>
+    <p class="text-sm mt-1" style="color:var(--sage);letter-spacing:0.1em;text-transform:uppercase;">Dev Test Console · AI Engine v1.0</p>
+    <div id="health-dot" class="mt-3 flex items-center justify-center gap-2 text-xs" style="color:var(--parchment);">
+      <span class="inline-block w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
+      Checking service…
+    </div>
+  </div>
+
+  <!-- ── Tabs ── -->
+  <div class="flex gap-1 mb-0">
+    <button class="tab-btn active" onclick="switchTab('recommend')" id="tab-recommend">🌱 Recommend</button>
+    <button class="tab-btn" onclick="switchTab('diagnose')"  id="tab-diagnose">🔬 Diagnose</button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       RECOMMEND PANEL
+  ═══════════════════════════════════════════ -->
+  <div id="panel-recommend" class="card" style="border-radius:0 12px 12px 12px;">
+
+    <h2 class="text-lg mb-4" style="color:var(--amber-lt);">Plant Recommendation</h2>
+
+    <div class="grid grid-cols-2 gap-4 mb-4" id="rec-form">
+
+      <div>
+        <label>Location</label>
+        <select id="r-location">
+          <option value="Balcony">Balcony</option>
+          <option value="Windowsill">Windowsill</option>
+          <option value="Rooftop">Rooftop</option>
+          <option value="Indoor">Indoor</option>
+        </select>
+      </div>
+
+      <div>
+        <label>Sunlight</label>
+        <select id="r-sunlight">
+          <option value="Full Sun">Full Sun</option>
+          <option value="Partial Shade">Partial Shade</option>
+          <option value="Low Light">Low Light</option>
+        </select>
+      </div>
+
+      <div class="col-span-2">
+        <label>Goal</label>
+        <select id="r-goal">
+          <option value="Cooking herbs">Cooking Herbs</option>
+          <option value="Vegetables">Vegetables</option>
+          <option value="Low maintenance">Low Maintenance</option>
+          <option value="Fruits">Fruits</option>
+        </select>
+      </div>
+
+    </div>
+
+    <div class="mb-4">
+      <label>Mock Plants (from MongoDB) — edit freely</label>
+      <textarea id="r-plants" rows="7" style="font-family:monospace;font-size:0.78rem;">[
+  { "name": "Thai Basil",     "category": "herb",      "difficulty": "Easy",     "minSunlight": 4 },
+  { "name": "Chili Pepper",   "category": "vegetable", "difficulty": "Moderate", "minSunlight": 6 },
+  { "name": "Water Spinach",  "category": "leafy",     "difficulty": "Easy",     "minSunlight": 3 },
+  { "name": "Cherry Tomato",  "category": "vegetable", "difficulty": "Moderate", "minSunlight": 6 },
+  { "name": "Pandan Leaf",    "category": "herb",      "difficulty": "Easy",     "minSunlight": 3 }
+]</textarea>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <button class="btn-primary" onclick="submitRecommend()" id="btn-rec">Get Recommendations →</button>
+      <span style="font-size:0.78rem;color:var(--sage);">POST /ai/recommend</span>
+    </div>
+
+    <!-- Results -->
+    <div id="rec-result" class="mt-6"></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       DIAGNOSE PANEL
+  ═══════════════════════════════════════════ -->
+  <div id="panel-diagnose" class="card" style="border-radius:0 12px 12px 12px; display:none;">
+
+    <h2 class="text-lg mb-4" style="color:var(--amber-lt);">Plant Diagnosis</h2>
+
+    <div class="mb-4">
+      <label>Plant Image</label>
+      <input type="file" id="d-image" accept="image/*" onchange="previewImage(event)" style="padding:0.45rem;" />
+      <img id="img-preview" src="" alt="preview" class="mt-3" />
+    </div>
+
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <div>
+        <label>Crop Type (optional)</label>
+        <input type="text" id="d-cropType" placeholder="e.g. Tomato, Thai Basil" />
+      </div>
+      <div>
+        <label>Growth Stage</label>
+        <select id="d-growthStage">
+          <option value="Unknown">Unknown</option>
+          <option value="Seedling">Seedling</option>
+          <option value="Vegetative">Vegetative</option>
+          <option value="Flowering">Flowering</option>
+          <option value="Fruiting">Fruiting</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label>Observed Symptoms (optional)</label>
+      <textarea id="d-symptoms" rows="3" placeholder="e.g. Yellow leaves with brown circular spots starting at the bottom of the plant…"></textarea>
+    </div>
+
+    <div class="flex items-center gap-4">
+      <button class="btn-primary" onclick="submitDiagnose()" id="btn-diag">Diagnose Plant →</button>
+      <span style="font-size:0.78rem;color:var(--sage);">POST /ai/diagnose</span>
+    </div>
+
+    <!-- Results -->
+    <div id="diag-result" class="mt-6"></div>
+  </div>
+
+  <!-- Footer -->
+  <p class="text-center mt-6" style="font-size:0.72rem;color:var(--leaf);letter-spacing:0.06em;">
+    HOMEGROW AI ENGINE · PERSON C · HACKATHON DEV CONSOLE
+  </p>
+
+</div>
+
+<script>
+  const API = 'http://localhost:8000';
+
+  // ── Health check ──────────────────────────────────────────────────────────
+  (async () => {
+    const dot = document.getElementById('health-dot');
+    try {
+      const r = await fetch(`${API}/health`);
+      const d = await r.json();
+      dot.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-green-500"></span>
+        Service online · model: <strong style="color:var(--lime)">${d.model || 'claude-opus-4-6'}</strong>`;
+    } catch {
+      dot.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+        <span style="color:#ef9a9a">Cannot reach http://localhost:8000 — is uvicorn running?</span>`;
+    }
+  })();
+
+  // ── Tab switching ─────────────────────────────────────────────────────────
+  function switchTab(tab) {
+    ['recommend','diagnose'].forEach(t => {
+      document.getElementById(`panel-${t}`).style.display = t === tab ? 'block' : 'none';
+      document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+    });
+  }
+
+  // ── Image preview ─────────────────────────────────────────────────────────
+  let imageBase64 = null;
+  function previewImage(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const dataUrl = ev.target.result;
+      // Store raw base64 (strip data URL prefix)
+      imageBase64 = dataUrl.split(',')[1];
+      const preview = document.getElementById('img-preview');
+      preview.src = dataUrl;
+      preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ── Spinner / Error helpers ───────────────────────────────────────────────
+  function showSpinner(containerId) {
+    document.getElementById(containerId).innerHTML =
+      `<div class="flex flex-col items-center gap-3 py-6">
+         <div class="spinner"></div>
+         <p style="font-size:0.82rem;color:var(--sage);">Consulting Claude AI…</p>
+       </div>`;
+  }
+
+  function showError(containerId, msg) {
+    document.getElementById(containerId).innerHTML =
+      `<div class="error-box">⚠ ${msg}</div>`;
+  }
+
+  // ── RECOMMEND ─────────────────────────────────────────────────────────────
+  async function submitRecommend() {
+    const btn = document.getElementById('btn-rec');
+    const out = document.getElementById('rec-result');
+
+    // Parse mock plants
+    let availablePlants = [];
+    try {
+      availablePlants = JSON.parse(document.getElementById('r-plants').value);
+      if (!Array.isArray(availablePlants)) throw new Error('Must be a JSON array');
+    } catch (e) {
+      showError('rec-result', `Invalid JSON in Mock Plants: ${e.message}`);
+      return;
+    }
+
+    const userInput = {
+      location: document.getElementById('r-location').value,
+      sunlight: document.getElementById('r-sunlight').value,
+      goal:     document.getElementById('r-goal').value,
+    };
+
+    btn.disabled = true;
+    showSpinner('rec-result');
+
+    try {
+      const res = await fetch(`${API}/ai/recommend`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userInput, availablePlants }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`HTTP ${res.status}: ${err.detail || res.statusText}`);
+      }
+
+      const data = await res.json();
+      renderRecommendations(data.recommendedPlants || []);
+    } catch (e) {
+      showError('rec-result', e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderRecommendations(plants) {
+    if (!plants.length) {
+      document.getElementById('rec-result').innerHTML =
+        `<p style="color:var(--sage);font-size:0.88rem;">No plants returned.</p>`;
+      return;
+    }
+
+    const html = `
+      <hr class="divider mb-5" />
+      <h3 class="text-base mb-4" style="color:var(--parchment);font-family:'Playfair Display',serif;">
+        ${plants.length} Recommendation${plants.length > 1 ? 's' : ''} · Ranked by Suitability
+      </h3>
+      <div class="flex flex-col gap-4">
+        ${plants.map((p, i) => {
+          const cg = p.careGuide || {};
+          return `
+          <div class="plant-card">
+            <div class="flex items-start justify-between p-4 pb-3" style="border-bottom:1px solid var(--leaf);">
+              <div>
+                <h3 style="font-family:'Playfair Display',serif;font-size:1.05rem;font-weight:700;">🌱 Plant #${i+1}</h3>
+                <p style="font-size:0.75rem;color:var(--sage);margin-top:0.2rem;">${p.reason || ''}</p>
+              </div>
+              <div class="text-right">
+                <span style="font-size:1.5rem;font-weight:700;color:var(--lime);">${p.score}%</span>
+                <p style="font-size:0.65rem;color:var(--sage);text-transform:uppercase;letter-spacing:0.07em;">match score</p>
+              </div>
+            </div>
+            <div class="p-4">
+              <div class="success-bar-track mb-4">
+                <div class="success-bar-fill" style="width:${p.score}%;"></div>
+              </div>
+              <div class="grid grid-cols-2 gap-2 mb-4">
+                <div class="stat-pill">
+                  <span class="stat-label">💧 Water</span>
+                  <span style="color:var(--cream);font-size:0.82rem;">${cg.waterFreq || '—'}</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="stat-label">☀️ Sunlight</span>
+                  <span style="color:var(--cream);font-size:0.82rem;">${cg.sunNeeds || '—'}</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="stat-label">⏱ Grow Time</span>
+                  <span style="color:var(--cream);font-size:0.82rem;">${cg.growTime || '—'}</span>
+                </div>
+                <div class="stat-pill">
+                  <span class="stat-label">🪴 Pot Size</span>
+                  <span style="color:var(--cream);font-size:0.82rem;">${cg.potSize || '—'}</span>
+                </div>
+              </div>
+              <div class="stat-pill mb-3" style="display:block;">
+                <span class="stat-label">🌍 Soil Mix</span>
+                <span style="color:var(--cream);font-size:0.82rem;">${cg.soilMix || '—'}</span>
+              </div>
+              <div class="stat-pill mb-4" style="display:block;">
+                <span class="stat-label">🧪 Fertilizer</span>
+                <span style="color:var(--cream);font-size:0.82rem;">${cg.fertilizerNeeded || '—'}</span>
+              </div>
+              <div class="calendar-toggle flex items-center gap-2" onclick="toggleCalendar('cal-${i}', this)">
+                <span style="font-size:0.78rem;color:var(--sage);text-transform:uppercase;letter-spacing:0.07em;">📅 Growing Calendar</span>
+                <span id="cal-arrow-${i}" style="color:var(--sage);font-size:0.75rem;transition:transform 0.2s;">▼</span>
+              </div>
+              <div class="calendar-body" id="cal-${i}">
+                ${(p.calendar || []).map(c => `
+                  <div class="cal-entry">
+                    <span class="cal-week">${c.week}</span>
+                    <p class="cal-title">${c.title}</p>
+                    <p class="cal-desc">${c.description}</p>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>`;
+
+    document.getElementById('rec-result').innerHTML = html;
+  }
+
+  function toggleCalendar(id, btn) {
+    const body  = document.getElementById(id);
+    const arrow = document.getElementById(`cal-arrow-${id.split('-')[1]}`);
+    const open  = body.classList.toggle('open');
+    if (arrow) arrow.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
+  }
+
+  // ── DIAGNOSE ─────────────────────────────────────────────────────────────
+  async function submitDiagnose() {
+    const btn = document.getElementById('btn-diag');
+    const out = document.getElementById('diag-result');
+
+    if (!imageBase64) {
+      showError('diag-result', 'Please select a plant image first.');
+      return;
+    }
+
+    const payload = {
+      image:       imageBase64,
+      cropType:    document.getElementById('d-cropType').value || 'Unknown',
+      growthStage: document.getElementById('d-growthStage').value,
+      issue:       document.getElementById('d-symptoms').value || '',
+    };
+
+    btn.disabled = true;
+    showSpinner('diag-result');
+
+    try {
+      const res = await fetch(`${API}/ai/diagnose`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(`HTTP ${res.status}: ${err.detail || res.statusText}`);
+      }
+
+      const data = await res.json();
+      renderDiagnosis(data);
+    } catch (e) {
+      showError('diag-result', e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function renderDiagnosis(d) {
+    const ai = d.aiResult || {};
+    const sevColor = { Low: 'badge-green', Moderate: 'badge-amber', High: 'badge-red' };
+    const confidence = ai.confidenceScore || 0;
+    const confClass = confidence >= 75 ? 'conf-high' : confidence >= 50 ? 'conf-mid' : 'conf-low';
+    const confPct   = Math.max(2, confidence);
+
+    const flagBanner = d.flaggedForReview
+      ? `<div class="warn-banner mb-4">
+           ⚠️ <strong>Flagged for Review</strong> — confidence is below 75%. Consider consulting a local expert.
+         </div>`
+      : '';
+
+    const html = `
+      <hr class="divider mb-5" />
+      <div class="plant-card" style="animation: fadeUp 0.4s ease;">
+        <div class="p-4 pb-3" style="border-bottom:1px solid var(--leaf);">
+          <div class="flex items-start justify-between gap-3 mb-2">
+            <div>
+              <h3 style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;">${ai.problem || 'Unknown'}</h3>
+              <div class="flex gap-2 mt-1 flex-wrap">
+                <span class="badge ${sevColor[ai.severity] || 'badge-amber'}">Severity: ${ai.severity || '—'}</span>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <span style="font-size:1.6rem;font-weight:700;color:${confidence >= 75 ? 'var(--lime)' : confidence >= 50 ? 'var(--amber-lt)' : '#ef9a9a'};">
+                ${confidence}%
+              </span>
+              <p style="font-size:0.65rem;color:var(--sage);text-transform:uppercase;letter-spacing:0.07em;">confidence</p>
+            </div>
+          </div>
+          <div class="conf-bar-track">
+            <div class="conf-bar-fill ${confClass}" style="width:${confPct}%;"></div>
+          </div>
+        </div>
+
+        <div class="p-4">
+          ${flagBanner}
+
+          <div class="mb-4">
+            <p style="font-size:0.72rem;color:var(--sage);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">Cause</p>
+            <p style="font-size:0.88rem;color:var(--parchment);line-height:1.65;">${ai.cause || '—'}</p>
+          </div>
+
+          <div class="mb-4">
+            <p style="font-size:0.72rem;color:var(--sage);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">Treatment</p>
+            <p style="font-size:0.88rem;color:var(--cream);line-height:1.65;">${ai.solution || '—'}</p>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('diag-result').innerHTML = html;
+  }
+</script>
+</body>
+</html>

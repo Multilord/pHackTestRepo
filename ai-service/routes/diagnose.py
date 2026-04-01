@@ -74,6 +74,27 @@ _FALLBACK_AI_RESULT = {
     "confidenceScore": 20,
 }
 
+_FALLBACK_CROP = {
+    "name": "Unknown Plant",
+    "botanicalName": "",
+    "description": "Could not identify the crop from the provided image.",
+}
+
+_FALLBACK_ALTERNATIVES = [
+    {
+        "problem": "Environmental Stress",
+        "cause": "Suboptimal watering, light, or temperature conditions.",
+        "solution": "Review and adjust your watering schedule, light exposure, and growing environment.",
+        "likelihood": 40,
+    },
+    {
+        "problem": "Nutrient Deficiency",
+        "cause": "Lack of key nutrients such as nitrogen, iron, or magnesium in the soil.",
+        "solution": "Apply a balanced liquid fertiliser and check soil pH.",
+        "likelihood": 40,
+    },
+]
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -81,7 +102,7 @@ _FALLBACK_AI_RESULT = {
 
 
 def _sanitise_ai_result(raw: dict) -> dict:
-    """Validate and sanitise the AI result fields."""
+    """Validate and sanitise the primary AI result fields."""
     severity = str(raw.get("severity", "Low")).strip().capitalize()
     if severity not in _VALID_SEVERITIES:
         logger.warning(f"Invalid severity '{severity}'. Defaulting to 'Low'.")
@@ -100,6 +121,36 @@ def _sanitise_ai_result(raw: dict) -> dict:
         "solution": str(raw.get("solution", "Monitor the plant closely.")),
         "confidenceScore": confidence,
     }
+
+
+def _sanitise_crop(raw: dict) -> dict:
+    """Validate and sanitise crop identification fields."""
+    return {
+        "name": str(raw.get("name", "Unknown Plant")),
+        "botanicalName": str(raw.get("botanicalName", "")),
+        "description": str(raw.get("description", "")),
+    }
+
+
+def _sanitise_alternatives(raw_list: list) -> list:
+    """Validate and sanitise alternative diagnoses."""
+    if not isinstance(raw_list, list):
+        return _FALLBACK_ALTERNATIVES
+    result = []
+    for item in raw_list[:3]:
+        if not isinstance(item, dict):
+            continue
+        try:
+            likelihood = max(1, min(99, int(item.get("likelihood", 5))))
+        except (TypeError, ValueError):
+            likelihood = 5
+        result.append({
+            "problem": str(item.get("problem", "Unknown")),
+            "cause": str(item.get("cause", "")),
+            "solution": str(item.get("solution", "")),
+            "likelihood": likelihood,
+        })
+    return result if result else _FALLBACK_ALTERNATIVES
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +178,8 @@ async def diagnose_plant(req: DiagnoseRequest):
         raise HTTPException(status_code=400, detail="Provide either 'image' (base64) or 'imageUrl'.")
 
     ai_result = None
+    crop_identified = None
+    alternatives = None
 
     # Run AI analysis if base64 image is provided
     if req.image and req.image.strip():
@@ -160,7 +213,7 @@ async def diagnose_plant(req: DiagnoseRequest):
                 model=GEMINI_MODEL,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
-                    max_output_tokens=1024,
+                    max_output_tokens=2048,
                 ),
                 contents=[
                     types.Part.from_bytes(data=image_bytes, mime_type=media_type),
@@ -183,9 +236,10 @@ async def diagnose_plant(req: DiagnoseRequest):
             parsed = parse_json_safe(cleaned)
 
             if parsed:
-                # Support both flat { problem, ... } and wrapped { aiResult: { ... } }
                 raw_result = parsed.get("aiResult", parsed)
                 ai_result = _sanitise_ai_result(raw_result)
+                crop_identified = _sanitise_crop(parsed.get("cropIdentified", {}))
+                alternatives = _sanitise_alternatives(parsed.get("alternatives", []))
             else:
                 logger.warning(f"Unparseable AI response. Raw (first 300): {raw_text[:300]!r}")
                 ai_result = _FALLBACK_AI_RESULT.copy()
@@ -193,6 +247,11 @@ async def diagnose_plant(req: DiagnoseRequest):
         # No base64 image — use fallback (imageUrl-only mode, no AI analysis)
         logger.info("No base64 image provided. Storing imageUrl without AI analysis.")
         ai_result = _FALLBACK_AI_RESULT.copy()
+
+    if crop_identified is None:
+        crop_identified = _FALLBACK_CROP.copy()
+    if alternatives is None:
+        alternatives = _FALLBACK_ALTERNATIVES.copy()
 
     flagged_for_review = ai_result["confidenceScore"] < 75
 
@@ -209,7 +268,9 @@ async def diagnose_plant(req: DiagnoseRequest):
         "growthStage": req.growthStage or "Unknown",
         "issue": req.symptoms or "None reported",
         "imageUrl": req.imageUrl or None,
+        "cropIdentified": crop_identified,
         "aiResult": ai_result,
+        "alternatives": alternatives,
         "flaggedForReview": flagged_for_review,
         "createdAt": datetime.now(timezone.utc),
     }
@@ -237,7 +298,9 @@ async def diagnose_plant(req: DiagnoseRequest):
         "growthStage": diagnosis_doc["growthStage"],
         "issue": diagnosis_doc["issue"],
         "imageUrl": diagnosis_doc["imageUrl"],
+        "cropIdentified": crop_identified,
         "aiResult": ai_result,
+        "alternatives": alternatives,
         "flaggedForReview": flagged_for_review,
         "createdAt": diagnosis_doc["createdAt"].isoformat(),
     }

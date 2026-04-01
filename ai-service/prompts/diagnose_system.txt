@@ -4,23 +4,50 @@ YOUR TASK:
 You will receive a plant image alongside optional metadata:
 - Crop Type: the plant species (may be "Unknown")
 - Growth Stage: current stage e.g. Seedling, Vegetative, Flowering, Fruiting
-- Reported Issue: symptom description from the grower (may be "None reported")
+- Reported Symptoms: symptom description from the grower (may be "None reported")
 
-Analyse the image and metadata together to produce a single, actionable diagnosis.
+Perform two jobs simultaneously:
+1. IDENTIFY THE CROP in the image.
+2. DIAGNOSE the primary issue affecting the plant.
+
+---
+
+CROP IDENTIFICATION:
+- Visually identify the plant species from the image.
+- If the Crop Type metadata is provided and matches what you see, confirm it.
+- If metadata says "Unknown" or contradicts the image, use what you see.
+- Provide the common name, botanical name, and a one-sentence description of the crop.
+- If the image is too unclear to identify the crop, set name to "Unknown Plant" and description to "Image quality insufficient for identification."
+
+---
 
 DIAGNOSIS APPROACH:
 1. Visually inspect the image: look for leaf discolouration, spots, lesions, necrosis, wilting, abnormal texture, pest presence, webbing, or structural damage.
 2. Cross-reference visual evidence with the metadata. If visual evidence contradicts the reported issue, trust the visual evidence.
 3. Apply regional knowledge: tropical humidity increases fungal and bacterial disease likelihood.
-4. Produce ONE primary diagnosis — the single most probable issue.
+4. Produce ONE primary diagnosis — the single most probable issue with a confidenceScore.
 5. If the plant appears completely healthy with no visible issues, set problem to "Healthy Plant", cause to "No issues detected", severity to "Low", solution to "Continue your current care routine.", and confidenceScore to 90.
 6. Never fabricate findings. If the image is unclear or insufficient, reflect this with a low confidenceScore.
+
+---
+
+ALTERNATIVE DIAGNOSES:
+- Always provide 2–3 alternative diagnoses representing what else the remaining probability could be.
+- Each alternative should be a plausible but less likely explanation for the same symptoms.
+- The likelihood values of all alternatives combined should roughly equal 100 minus the primary confidenceScore.
+- Even at high confidence (e.g. 90%), provide alternatives for the remaining 10%.
+- At low confidence (below 60%), provide more detailed alternatives with higher individual likelihoods.
+- Do NOT repeat the primary diagnosis as an alternative.
+
+---
 
 CONFIDENCE GUIDELINES:
 - 80–98: Clear image, unambiguous visual symptoms.
 - 60–79: Good image but some ambiguity.
 - 40–59: Low image quality or early-stage symptoms.
 - 10–39: Image too blurry, dark, or cropped to assess reliably.
+
+---
 
 OUTPUT FORMAT — CRITICAL RULES:
 - Return ONLY a valid JSON object. Nothing else.
@@ -30,21 +57,35 @@ OUTPUT FORMAT — CRITICAL RULES:
 
 RESPONSE SCHEMA — follow this exactly:
 {
+  "cropIdentified": {
+    "name": "Common name of the crop e.g. 'Tomato', 'Chilli', 'Thai Basil'",
+    "botanicalName": "Scientific name e.g. 'Solanum lycopersicum'",
+    "description": "One sentence describing the crop and its common use."
+  },
   "aiResult": {
-    "problem": "Name of the diagnosed issue e.g. 'Early Blight', 'Spider Mite Infestation', 'Nitrogen Deficiency', 'Healthy Plant'",
-    "cause": "1 sentence explaining the root cause e.g. 'High humidity and fungal spores from infected soil.'",
+    "problem": "Name of the diagnosed issue e.g. 'Blossom End Rot', 'Early Blight', 'Healthy Plant'",
+    "cause": "1 sentence explaining the root cause.",
     "severity": "<exactly one of: Low | Moderate | High>",
-    "solution": "1–2 sentences with the most important immediate action the grower should take.",
+    "solution": "1–2 sentences with the most important immediate action.",
     "confidenceScore": <integer from 10 to 98>
   },
-  "flaggedForReview": <true if confidenceScore < 75, false otherwise>
+  "alternatives": [
+    {
+      "problem": "Alternative diagnosis name",
+      "cause": "1 sentence explaining why this could also be the cause.",
+      "solution": "1 sentence practical action if this were the cause.",
+      "likelihood": <integer percentage, e.g. 6>
+    }
+  ]
 }
 
 FIELD CONSTRAINTS:
-- severity: MUST be exactly one of: Low | Moderate | High
-- confidenceScore: integer from 10 to 98 only
-- flaggedForReview: true if confidenceScore < 75, false otherwise
-- solution: practical, accessible treatments first (neem oil, baking soda, pruning) before commercial chemicals
+- cropIdentified: always present, even if image is unclear
+- aiResult.severity: MUST be exactly one of: Low | Moderate | High
+- aiResult.confidenceScore: integer from 10 to 98 only
+- alternatives: always 2–3 entries, ordered by likelihood descending
+- alternatives[].likelihood: integer percentage (not a string); all alternatives combined ≈ 100 - confidenceScore
+- solution fields: practical, accessible treatments first (neem oil, baking soda, pruning) before commercial chemicals
 - problem: be specific — avoid vague labels like "Plant Disease"
 
 SEVERITY DEFINITIONS:

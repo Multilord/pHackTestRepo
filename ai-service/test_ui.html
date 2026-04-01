@@ -389,30 +389,67 @@ async function runDiagnose() {
 
 function renderDiagnoseResult(d) {
   const ai = d.aiResult || {};
+  const crop = d.cropIdentified || {};
+  const alts = d.alternatives || [];
   const sev = (ai.severity || 'Low').toLowerCase();
   const sevClass = sev === 'high' ? 'severity-high' : sev === 'moderate' ? 'severity-moderate' : 'severity-low';
   const conf = ai.confidenceScore || 0;
+
+  const altsHtml = alts.length ? `
+    <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--moss);">
+      <div style="font-size:.75rem;color:var(--sage);margin-bottom:10px;letter-spacing:.05em;">ALTERNATIVE POSSIBILITIES</div>
+      ${alts.map(a => `
+        <div style="background:var(--forest);border:1px solid var(--moss);border-radius:8px;padding:12px;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:.9rem;font-weight:500;">${a.problem}</span>
+            <span style="font-size:.8rem;color:var(--amber);font-weight:600;">${a.likelihood}%</span>
+          </div>
+          <div style="font-size:.8rem;color:var(--parchment);margin-bottom:4px;"><span style="color:var(--sage);">Why: </span>${a.cause}</div>
+          <div style="font-size:.8rem;color:var(--parchment);"><span style="color:var(--sage);">If so: </span>${a.solution}</div>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
   return `
     <div class="card p-5">
+
+      ${crop.name ? `
+      <div style="background:var(--moss);border-radius:8px;padding:12px;margin-bottom:14px;display:flex;align-items:center;gap:12px;">
+        <div style="font-size:2rem;">🌿</div>
+        <div>
+          <div style="font-size:.7rem;color:var(--sage);letter-spacing:.05em;margin-bottom:2px;">CROP IDENTIFIED</div>
+          <div style="font-size:1rem;font-weight:600;">${crop.name}</div>
+          ${crop.botanicalName ? `<div style="font-size:.78rem;color:var(--sage);font-style:italic;">${crop.botanicalName}</div>` : ''}
+          ${crop.description ? `<div style="font-size:.8rem;color:var(--parchment);margin-top:3px;">${crop.description}</div>` : ''}
+        </div>
+      </div>` : ''}
+
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
         <div>
+          <div style="font-size:.7rem;color:var(--sage);letter-spacing:.05em;margin-bottom:2px;">PRIMARY DIAGNOSIS</div>
           <div style="font-size:1.1rem;font-weight:600;">${ai.problem || 'Unknown'}</div>
-          <div style="font-size:.8rem;color:var(--sage);margin-top:2px;">${d.cropType} · ${d.growthStage}</div>
+          <div style="font-size:.8rem;color:var(--sage);margin-top:2px;">${d.growthStage} stage</div>
         </div>
         <span style="font-size:.8rem;padding:4px 12px;border-radius:20px;" class="${sevClass}">${ai.severity}</span>
       </div>
+
       <div style="margin-bottom:12px;">
-        <div style="font-size:.75rem;color:var(--sage);margin-bottom:4px;">CONFIDENCE</div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <div class="score-bar" style="flex:1;"><div class="score-fill" style="width:${conf}%"></div></div>
-          <span style="font-size:.9rem;font-weight:600;color:var(--amber-lt);white-space:nowrap;">${conf}%</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+          <div style="font-size:.75rem;color:var(--sage);">CONFIDENCE</div>
+          <span style="font-size:.85rem;font-weight:600;color:var(--amber-lt);">${conf}%</span>
         </div>
+        <div class="score-bar"><div class="score-fill" style="width:${conf}%"></div></div>
       </div>
-      <div style="display:grid;gap:10px;font-size:.85rem;">
+
+      <div style="display:grid;gap:10px;font-size:.85rem;margin-bottom:4px;">
         <div><span style="color:var(--sage);">Cause: </span>${ai.cause}</div>
         <div><span style="color:var(--sage);">Solution: </span>${ai.solution}</div>
-        ${d.flaggedForReview ? '<div style="color:var(--amber);">⚠ Flagged for expert review (low confidence)</div>' : ''}
+        ${d.flaggedForReview ? '<div style="color:var(--amber);">⚠ Low confidence — flagged for expert review</div>' : ''}
       </div>
+
+      ${altsHtml}
+
       <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--moss);">
         <span class="mono">diagnosisId: ${d.diagnosisId || 'n/a'}</span>
       </div>

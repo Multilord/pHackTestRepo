@@ -1,27 +1,37 @@
 """
 routes/recommend.py
-POST /ai/recommend
+POST /api/recommend
 
-Receives userInput + availablePlants from Person D's Express backend.
-Calls Gemini to rank plants and return enriched recommendations.
-Returns schema-safe JSON — Person D's backend saves this into MongoDB.
-
-Person D is the ONLY caller of this endpoint.
-This route never touches MongoDB.
+Architecture: FastAPI -> MongoDB Atlas + Gemini AI
+- Reads candidate plants directly from MongoDB plants collection
+- Filters by real plant schema (spaceType, idealConditions)
+- Uses AI to rank filtered candidates and generate reasons
+- Saves recommendation to MongoDB recommendations collection
+- Returns enriched response with full plant data + AI ranking
 """
 
 import json
 import logging
 import os
-from typing import Any, Dict, List, Optional, Union
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
-from google import genai
-from google.genai import types
+from bson import ObjectId
+from bson.errors import InvalidId
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
+from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 
-from utils.helpers import load_prompt, strip_json_fences, parse_json_safe
+from utils.db import get_db
+from utils.helpers import (
+    clamp_confidence,
+    load_prompt,
+    parse_json_safe,
+    serialize_doc,
+    strip_json_fences,
+)
 
 load_dotenv()
 
@@ -32,114 +42,73 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 
 # ---------------------------------------------------------------------------
-# Pydantic request models
+# Request model
 # ---------------------------------------------------------------------------
-
-
-class UserInput(BaseModel):
-    location: str = Field(..., description="Growing space type e.g. 'Balcony', 'Indoor', 'Rooftop'")
-    sunlight: str = Field(..., description="Sunlight availability e.g. 'Full Sun', 'Partial Shade'")
-    goal: str = Field(..., description="Growing goal e.g. 'Low maintenance', 'Cooking herbs'")
 
 
 class RecommendRequest(BaseModel):
-    userInput: UserInput
-    availablePlants: List[Dict[str, Any]] = Field(
-        default_factory=list,
-        description="Plant documents from MongoDB plants collection, sent by Person D's backend",
-    )
+    userId: Optional[str] = Field(None, description="MongoDB user _id (optional)")
+    location: str = Field(..., description="Growing space e.g. 'Balcony', 'Indoor', 'Rooftop'")
+    sunlight: str = Field(..., description="Light level e.g. 'Full Sun', 'Partial Shade', 'Low Light'")
+    goal: str = Field(..., description="Growing goal e.g. 'Low maintenance', 'Cooking herbs'")
+    sunlightHours: Optional[float] = Field(None, description="Hours of sunlight per day")
+    temperature: Optional[float] = Field(None, description="Ambient temperature in °C")
+    humidity: Optional[float] = Field(None, description="Ambient humidity percentage")
 
 
 # ---------------------------------------------------------------------------
-# Pydantic response models
+# Plant filtering
 # ---------------------------------------------------------------------------
 
 
-class CareGuide(BaseModel):
-    waterFreq: str
-    sunNeeds: str
-    growTime: Union[int, str]
-    soilMix: str
-    potSize: str
-    fertilizerNeeded: str
+def _filter_plants(plants: List[dict], req: RecommendRequest) -> List[dict]:
+    """
+    Filter plants by spaceType and idealConditions.
+    Falls back progressively if not enough candidates pass.
+    """
+    def passes_strict(p: dict) -> bool:
+        space = str(p.get("spaceType", "")).strip().lower()
+        if space and space != req.location.strip().lower():
+            return False
+        ic = p.get("idealConditions", {})
+        if req.sunlightHours is not None:
+            mn = ic.get("minSunlight")
+            mx = ic.get("maxSunlight")
+            if mn is not None and req.sunlightHours < mn:
+                return False
+            if mx is not None and req.sunlightHours > mx:
+                return False
+        if req.temperature is not None:
+            mn = ic.get("minTemp")
+            mx = ic.get("maxTemp")
+            if mn is not None and req.temperature < mn:
+                return False
+            if mx is not None and req.temperature > mx:
+                return False
+        if req.humidity is not None:
+            mn = ic.get("minHumidity")
+            mx = ic.get("maxHumidity")
+            if mn is not None and req.humidity < mn:
+                return False
+            if mx is not None and req.humidity > mx:
+                return False
+        return True
 
+    def passes_space_only(p: dict) -> bool:
+        space = str(p.get("spaceType", "")).strip().lower()
+        return not space or space == req.location.strip().lower()
 
-class CalendarEntry(BaseModel):
-    week: str
-    title: str
-    description: str
+    strict = [p for p in plants if passes_strict(p)]
+    if len(strict) >= 3:
+        return strict
 
+    space_only = [p for p in plants if passes_space_only(p)]
+    if len(space_only) >= 3:
+        logger.info("Strict filter yielded <3 plants — falling back to spaceType-only filter.")
+        return space_only
 
-class PlantRecommendation(BaseModel):
-    plantId: str
-    score: int
-    reason: str
-    careGuide: CareGuide
-    calendar: List[CalendarEntry]
-
-
-class RecommendResponse(BaseModel):
-    recommendedPlants: List[PlantRecommendation]
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
-def _sanitise_recommendation(raw: dict) -> PlantRecommendation:
-    """Coerce a single Gemini-returned plant dict into a validated PlantRecommendation."""
-
-    # score: clamp to [1, 100]
-    try:
-        score = max(1, min(100, int(raw.get("score", 70))))
-    except (TypeError, ValueError):
-        score = 70
-
-    # careGuide
-    cg_raw = raw.get("careGuide", {})
-    if not isinstance(cg_raw, dict):
-        cg_raw = {}
-
-    care_guide = CareGuide(
-        waterFreq=str(cg_raw.get("waterFreq", "As needed")),
-        sunNeeds=str(cg_raw.get("sunNeeds", "Moderate light")),
-        growTime=cg_raw.get("growTime", "60–90 days"),
-        soilMix=str(cg_raw.get("soilMix", "General-purpose potting mix")),
-        potSize=str(cg_raw.get("potSize", "8–10 inch pot")),
-        fertilizerNeeded=str(cg_raw.get("fertilizerNeeded", "Monthly")),
-    )
-
-    # calendar: 4–6 entries
-    calendar_raw = raw.get("calendar", [])
-    if not isinstance(calendar_raw, list):
-        calendar_raw = []
-    calendar_raw = calendar_raw[:6]
-    while len(calendar_raw) < 4:
-        idx = len(calendar_raw) + 1
-        calendar_raw.append({
-            "week": f"Week {idx * 2 - 1}–{idx * 2}",
-            "title": "Ongoing Care",
-            "description": "Continue regular watering, feeding, and monitoring for pests.",
-        })
-
-    validated_calendar = []
-    for entry in calendar_raw:
-        if not isinstance(entry, dict):
-            continue
-        validated_calendar.append(CalendarEntry(
-            week=str(entry.get("week", "Week ?")),
-            title=str(entry.get("title", "Care")),
-            description=str(entry.get("description", "Continue regular plant care.")),
-        ))
-
-    return PlantRecommendation(
-        plantId=str(raw.get("plantId", "")),
-        score=score,
-        reason=str(raw.get("reason", "Suitable for your growing conditions.")),
-        careGuide=care_guide,
-        calendar=validated_calendar,
-    )
+    logger.info("SpaceType filter yielded <3 plants — using all plants as candidates.")
+    return plants
 
 
 # ---------------------------------------------------------------------------
@@ -147,94 +116,151 @@ def _sanitise_recommendation(raw: dict) -> PlantRecommendation:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/recommend", response_model=RecommendResponse)
-async def recommend_plants(request: RecommendRequest) -> RecommendResponse:
+@router.post("/recommend")
+async def recommend_plants(req: RecommendRequest):
     """
-    Rank and enrich plant recommendations using Gemini.
-
-    Called by Person D's Express backend with:
-      - userInput: user's location, sunlight, and goal
-      - availablePlants: plant candidates fetched from MongoDB plants collection
-
-    Returns top 3–5 ranked plant recommendations.
-    Person D's backend saves the result into the recommendations collection.
+    Generate plant recommendations for a user.
+    Reads plants from MongoDB, filters, ranks with AI, saves result to DB.
     """
+    db = get_db()
+
+    # 1. Load system prompt
     try:
         system_prompt = load_prompt("recommend_system.txt")
     except RuntimeError as e:
         logger.error(f"Could not load recommend prompt: {e}")
         raise HTTPException(status_code=500, detail="AI service configuration error: missing prompt file.")
 
-    if not request.availablePlants:
-        raise HTTPException(
-            status_code=400,
-            detail="availablePlants must not be empty. Person D's backend should query the plants collection first."
-        )
+    # 2. Fetch all plants from MongoDB
+    try:
+        all_plants = await db.plants.find().to_list(length=500)
+    except Exception as e:
+        logger.error(f"Failed to fetch plants from DB: {e}")
+        raise HTTPException(status_code=503, detail="Database unavailable. Cannot fetch plants.")
 
-    user_input_json = json.dumps(request.userInput.model_dump(), indent=2)
-    plants_json = json.dumps(request.availablePlants, indent=2)
+    if not all_plants:
+        raise HTTPException(status_code=404, detail="No plants found in database.")
 
+    # 3. Filter candidates
+    candidates = _filter_plants(all_plants, req)
+    logger.info(f"Candidates after filtering: {len(candidates)} / {len(all_plants)} total plants.")
+
+    # Prepare candidates for AI (serialize ObjectIds)
+    candidates_for_ai = []
+    for p in candidates:
+        doc = {k: str(v) if isinstance(v, ObjectId) else v for k, v in p.items()}
+        candidates_for_ai.append(doc)
+
+    # 4. Call Gemini AI
     user_message = (
-        f"User Input:\n{user_input_json}\n\n"
-        f"Available Plants from Database ({len(request.availablePlants)} total):\n{plants_json}\n\n"
-        f"Rank the top 3 to 5 plants ONLY from the list above. "
-        f"Use each plant's _id field exactly as the plantId in your response. "
-        f"Return strictly as JSON following the schema in your instructions."
+        f"userConditions:\n{json.dumps({'location': req.location, 'sunlight': req.sunlight, 'goal': req.goal, 'sunlightHours': req.sunlightHours, 'temperature': req.temperature, 'humidity': req.humidity}, indent=2)}\n\n"
+        f"candidatePlants ({len(candidates_for_ai)} total):\n{json.dumps(candidates_for_ai, indent=2)}\n\n"
+        f"Select and rank the best 3–5 plants. Return ONLY valid JSON per the schema."
     )
 
     try:
-        logger.info(
-            f"Calling Gemini ({GEMINI_MODEL}) for recommendations. "
-            f"Plant candidates: {len(request.availablePlants)}"
-        )
+        logger.info(f"Calling Gemini ({GEMINI_MODEL}) for recommendations. Candidates: {len(candidates_for_ai)}")
         client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         response = client.models.generate_content(
             model=GEMINI_MODEL,
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
-                max_output_tokens=8192,
+                max_output_tokens=4096,
             ),
             contents=user_message,
         )
         raw_text = response.text
-
     except Exception as e:
         err = str(e)
         if "429" in err or "RESOURCE_EXHAUSTED" in err:
-            logger.warning(f"Gemini rate limit hit: {err[:100]}")
+            logger.warning(f"Gemini rate limit: {err[:100]}")
             raise HTTPException(status_code=503, detail="AI service temporarily unavailable. Please retry.")
         if "403" in err or "401" in err or "API_KEY" in err.upper():
-            logger.error(f"Gemini auth error: {err[:100]}")
             raise HTTPException(status_code=502, detail="AI service authentication error.")
-        logger.error(f"Unexpected error calling Gemini for recommendations: {err[:200]}")
+        logger.error(f"Gemini error: {err[:200]}")
         raise HTTPException(status_code=503, detail="AI service temporarily unavailable. Please retry.")
 
-    cleaned_text = strip_json_fences(raw_text)
-    parsed = parse_json_safe(cleaned_text)
-
-    if not parsed:
-        logger.warning(f"Gemini returned unparseable JSON. Raw (first 300): {raw_text[:300]!r}")
+    # 5. Parse AI response
+    cleaned = strip_json_fences(raw_text)
+    parsed = parse_json_safe(cleaned)
+    if not parsed or not isinstance(parsed.get("plants"), list) or not parsed["plants"]:
+        logger.warning(f"AI returned invalid structure. Raw (first 300): {raw_text[:300]!r}")
         raise HTTPException(status_code=502, detail="AI returned an invalid response. Please retry.")
 
-    plants_raw = parsed.get("recommendedPlants")
-    if not isinstance(plants_raw, list) or len(plants_raw) == 0:
-        logger.warning(f"Gemini returned invalid 'recommendedPlants' structure: {type(plants_raw).__name__}")
-        raise HTTPException(status_code=502, detail="AI returned an invalid response. Please retry.")
+    ai_plants: List[dict] = parsed["plants"][:5]
 
-    plants_raw = plants_raw[:5]
-    validated: List[PlantRecommendation] = []
-    for idx, plant in enumerate(plants_raw):
-        if not isinstance(plant, dict):
-            logger.warning(f"Plant at index {idx} is not a dict. Skipping.")
+    # 6. Build index of candidates by _id string for fast lookup
+    plant_index: Dict[str, dict] = {str(p["_id"]): p for p in candidates}
+
+    # 7. Build enriched response + collect valid ObjectIds for DB
+    result_plants = []
+    valid_plant_oids = []
+
+    for item in ai_plants:
+        pid = str(item.get("plantId", "")).strip()
+        if not pid or pid not in plant_index:
+            logger.warning(f"AI returned unknown plantId '{pid}' — skipping.")
             continue
+
+        plant_doc = plant_index[pid]
+        success_rate = item.get("successRate", 70)
         try:
-            validated.append(_sanitise_recommendation(plant))
-        except Exception as e:
-            logger.warning(f"Failed to sanitise plant at index {idx}: {e}. Skipping.")
+            success_rate = max(1, min(100, int(success_rate)))
+        except (TypeError, ValueError):
+            success_rate = 70
 
-    if not validated:
-        logger.warning("All plants failed validation.")
-        raise HTTPException(status_code=502, detail="AI returned an invalid response. Please retry.")
+        result_plants.append({
+            "plantId": pid,
+            "name": plant_doc.get("name", ""),
+            "botanicalName": plant_doc.get("botanicalName", ""),
+            "emoji": plant_doc.get("emoji", ""),
+            "category": plant_doc.get("category", ""),
+            "difficulty": plant_doc.get("difficulty", ""),
+            "spaceType": plant_doc.get("spaceType", ""),
+            "idealConditions": plant_doc.get("idealConditions", {}),
+            "careTips": plant_doc.get("careTips", {}),
+            "successRate": success_rate,
+            "reason": str(item.get("reason", "")),
+        })
+        try:
+            valid_plant_oids.append(ObjectId(pid))
+        except InvalidId:
+            logger.warning(f"plantId '{pid}' is not a valid ObjectId — storing as string ref only.")
 
-    logger.info(f"Returning {len(validated)} plant recommendations.")
-    return RecommendResponse(recommendedPlants=validated)
+    if not result_plants:
+        logger.warning("All AI-returned plants failed validation.")
+        raise HTTPException(status_code=502, detail="AI returned no valid plants. Please retry.")
+
+    # 8. Save recommendation to MongoDB
+    user_oid = None
+    if req.userId:
+        try:
+            user_oid = ObjectId(req.userId)
+        except InvalidId:
+            logger.warning(f"Invalid userId '{req.userId}' — saving recommendation without userId.")
+
+    rec_doc: Dict[str, Any] = {
+        "userInput": {
+            "location": req.location,
+            "sunlight": req.sunlight,
+            "goal": req.goal,
+        },
+        "plants": valid_plant_oids,
+        "createdAt": datetime.now(timezone.utc),
+    }
+    if user_oid is not None:
+        rec_doc["userId"] = user_oid
+
+    try:
+        insert_result = await db.recommendations.insert_one(rec_doc)
+        recommendation_id = str(insert_result.inserted_id)
+        logger.info(f"Recommendation saved. _id={recommendation_id}, plants={len(valid_plant_oids)}")
+    except Exception as e:
+        logger.error(f"Failed to save recommendation to DB: {e}")
+        recommendation_id = None
+
+    logger.info(f"Returning {len(result_plants)} plant recommendations.")
+    return {
+        "recommendationId": recommendation_id,
+        "plants": result_plants,
+    }

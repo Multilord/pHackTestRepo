@@ -20,652 +20,445 @@
       --amber:    #c9963a;
       --amber-lt: #e8b84b;
       --red:      #c0392b;
-      --yellow:   #d4a017;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       background-color: var(--forest);
       color: var(--cream);
       font-family: 'DM Sans', sans-serif;
       font-weight: 300;
       min-height: 100vh;
-      background-image:
-        radial-gradient(ellipse 80% 50% at 50% -10%, rgba(46,92,46,0.35) 0%, transparent 70%),
-        url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232e5c2e' fill-opacity='0.07'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+      background-image: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(46,92,46,0.35) 0%, transparent 70%);
     }
-
-    /* grain overlay */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-      pointer-events: none;
-      z-index: 0;
-      opacity: 0.4;
-    }
-
     .content { position: relative; z-index: 1; }
-
-    h1, h2, h3, .serif { font-family: 'Playfair Display', serif; }
-
-    /* ── Tabs ── */
-    .tab-btn {
-      padding: 0.6rem 1.8rem;
-      border-radius: 8px 8px 0 0;
-      font-size: 0.9rem;
-      font-family: 'DM Sans', sans-serif;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      font-weight: 500;
-      cursor: pointer;
-      border: 1px solid var(--leaf);
-      border-bottom: none;
-      background: var(--canopy);
-      color: var(--sage);
-      transition: all 0.2s ease;
-    }
-    .tab-btn.active {
-      background: var(--moss);
-      color: var(--cream);
-      border-color: var(--sage);
-    }
-    .tab-btn:hover:not(.active) { background: var(--moss); color: var(--parchment); }
-
-    /* ── Card ── */
-    .card {
-      background: var(--canopy);
-      border: 1px solid var(--leaf);
-      border-radius: 12px;
-      padding: 1.5rem;
-    }
-
-    /* ── Form Elements ── */
-    label { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--parchment); display: block; margin-bottom: 0.3rem; }
+    .card { background: var(--canopy); border: 1px solid var(--moss); border-radius: 12px; }
+    .tab-btn { transition: all .2s; }
+    .tab-btn.active { background: var(--leaf); color: var(--cream); }
+    .tab-btn:not(.active) { color: var(--lime); }
+    .tab-btn:not(.active):hover { background: var(--moss); }
+    label { font-size: 0.8rem; font-weight: 500; color: var(--lime); letter-spacing: .05em; text-transform: uppercase; display: block; margin-bottom: 4px; }
     input, select, textarea {
-      width: 100%;
-      background: var(--forest);
-      border: 1px solid var(--leaf);
-      border-radius: 8px;
-      color: var(--cream);
-      padding: 0.55rem 0.85rem;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.9rem;
-      outline: none;
-      transition: border-color 0.2s;
+      width: 100%; background: var(--moss); border: 1px solid var(--leaf);
+      border-radius: 8px; padding: 10px 14px; color: var(--cream);
+      font-family: inherit; font-size: 0.9rem; outline: none;
     }
     input:focus, select:focus, textarea:focus { border-color: var(--sage); }
-    select option { background: var(--forest); }
-    textarea { resize: vertical; }
-
-    /* ── Button ── */
+    input::placeholder, textarea::placeholder { color: var(--sage); opacity: .7; }
+    select option { background: var(--moss); }
     .btn-primary {
-      background: linear-gradient(135deg, var(--leaf) 0%, var(--sage) 100%);
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      padding: 0.7rem 2rem;
-      font-family: 'DM Sans', sans-serif;
-      font-size: 0.9rem;
-      font-weight: 500;
-      letter-spacing: 0.05em;
-      cursor: pointer;
-      transition: opacity 0.2s, transform 0.15s;
+      background: var(--leaf); color: var(--cream); border: none; border-radius: 8px;
+      padding: 12px 24px; font-family: inherit; font-size: 0.95rem; font-weight: 500;
+      cursor: pointer; transition: background .2s; width: 100%;
     }
-    .btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
-    .btn-primary:active { transform: translateY(0); }
-    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-
-    /* ── Plant Card ── */
-    .plant-card {
-      background: var(--moss);
-      border: 1px solid var(--leaf);
-      border-radius: 14px;
-      overflow: hidden;
-      animation: fadeUp 0.4s ease both;
+    .btn-primary:hover { background: var(--sage); }
+    .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-secondary {
+      background: transparent; color: var(--lime); border: 1px solid var(--leaf);
+      border-radius: 8px; padding: 8px 16px; font-family: inherit; font-size: 0.85rem;
+      cursor: pointer; transition: all .2s;
     }
-    .plant-card:nth-child(2) { animation-delay: 0.07s; }
-    .plant-card:nth-child(3) { animation-delay: 0.14s; }
-    .plant-card:nth-child(4) { animation-delay: 0.21s; }
-    .plant-card:nth-child(5) { animation-delay: 0.28s; }
-
-    @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(16px); }
-      to   { opacity: 1; transform: translateY(0); }
+    .btn-secondary:hover { background: var(--moss); }
+    .status-bar {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 0.8rem; padding: 8px 14px; border-radius: 8px;
+      background: var(--moss); border: 1px solid var(--leaf);
     }
-
-    /* ── Stat pill ── */
-    .stat-pill {
-      background: var(--forest);
-      border: 1px solid var(--leaf);
-      border-radius: 6px;
-      padding: 0.35rem 0.65rem;
-      font-size: 0.76rem;
-    }
-    .stat-label { color: var(--sage); display: block; font-size: 0.68rem; letter-spacing: 0.07em; text-transform: uppercase; }
-
-    /* ── Success bar ── */
-    .success-bar-track {
-      background: var(--forest);
-      border-radius: 999px;
-      height: 6px;
-      overflow: hidden;
-    }
-    .success-bar-fill {
-      height: 100%;
-      border-radius: 999px;
-      background: linear-gradient(90deg, var(--sage), var(--lime));
-      transition: width 0.8s cubic-bezier(0.4,0,0.2,1);
-    }
-
-    /* ── Confidence bar ── */
-    .conf-bar-track {
-      background: var(--forest);
-      border-radius: 999px;
-      height: 10px;
-      overflow: hidden;
-    }
-    .conf-bar-fill {
-      height: 100%;
-      border-radius: 999px;
-      transition: width 1s cubic-bezier(0.4,0,0.2,1);
-    }
-    .conf-high  { background: linear-gradient(90deg, #2e7d32, #66bb6a); }
-    .conf-mid   { background: linear-gradient(90deg, #e65100, #ffa726); }
-    .conf-low   { background: linear-gradient(90deg, #b71c1c, #ef5350); }
-
-    /* ── Badge ── */
-    .badge {
-      display: inline-block;
-      padding: 0.2rem 0.7rem;
-      border-radius: 999px;
-      font-size: 0.73rem;
-      font-weight: 500;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-    }
-    .badge-green  { background: rgba(94,160,94,0.18); color: var(--lime); border: 1px solid rgba(94,160,94,0.3); }
-    .badge-amber  { background: rgba(201,150,58,0.18); color: var(--amber-lt); border: 1px solid rgba(201,150,58,0.3); }
-    .badge-red    { background: rgba(192,57,43,0.18); color: #ef9a9a; border: 1px solid rgba(192,57,43,0.3); }
-    .badge-blue   { background: rgba(41,182,246,0.12); color: #81d4fa; border: 1px solid rgba(41,182,246,0.25); }
-    .badge-purple { background: rgba(186,104,200,0.15); color: #ce93d8; border: 1px solid rgba(186,104,200,0.3); }
-
-    /* ── Calendar accordion ── */
-    .calendar-toggle { cursor: pointer; user-select: none; }
-    .calendar-body   { display: none; margin-top: 0.75rem; }
-    .calendar-body.open { display: block; }
-    .cal-entry { border-left: 2px solid var(--sage); padding-left: 0.85rem; margin-bottom: 0.85rem; }
-    .cal-week  { font-size: 0.72rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--sage); }
-    .cal-title { font-weight: 500; font-size: 0.88rem; color: var(--cream); }
-    .cal-desc  { font-size: 0.82rem; color: var(--parchment); margin-top: 0.15rem; }
-
-    /* ── Image preview ── */
-    #img-preview {
-      max-height: 220px;
-      object-fit: cover;
-      border-radius: 10px;
-      border: 1px solid var(--leaf);
-      width: 100%;
-      display: none;
-    }
-
-    /* ── Spinner ── */
-    .spinner {
-      width: 36px; height: 36px;
-      border: 3px solid var(--leaf);
-      border-top-color: var(--sage);
-      border-radius: 50%;
-      animation: spin 0.75s linear infinite;
-      margin: 0 auto;
-    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-green { background: #4ade80; }
+    .dot-red { background: var(--red); }
+    .dot-yellow { background: var(--amber); animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:.4 } }
+    .plant-card { background: var(--moss); border: 1px solid var(--leaf); border-radius: 10px; padding: 16px; }
+    .score-bar { height: 6px; border-radius: 3px; background: var(--leaf); overflow: hidden; }
+    .score-fill { height: 100%; background: linear-gradient(90deg, var(--sage), var(--amber-lt)); border-radius: 3px; transition: width .6s ease; }
+    .severity-low { background: rgba(74,222,128,.15); color: #4ade80; border: 1px solid rgba(74,222,128,.3); }
+    .severity-moderate { background: rgba(201,150,58,.15); color: var(--amber-lt); border: 1px solid rgba(201,150,58,.3); }
+    .severity-high { background: rgba(192,57,43,.15); color: #ff6b6b; border: 1px solid rgba(192,57,43,.3); }
+    .err { background: rgba(192,57,43,.12); border: 1px solid rgba(192,57,43,.35); border-radius: 8px; padding: 12px; color: #ff8080; font-size: .85rem; }
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid var(--sage); border-top-color: var(--cream); border-radius: 50%; animation: spin .7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Error box ── */
-    .error-box {
-      background: rgba(192,57,43,0.12);
-      border: 1px solid rgba(192,57,43,0.4);
-      border-radius: 8px;
-      padding: 1rem;
-      color: #ef9a9a;
-      font-size: 0.88rem;
-      animation: fadeUp 0.3s ease;
-    }
-
-    /* ── Warning banner ── */
-    .warn-banner {
-      background: rgba(201,150,58,0.15);
-      border: 1px solid rgba(201,150,58,0.4);
-      border-radius: 8px;
-      padding: 0.75rem 1rem;
-      color: var(--amber-lt);
-      font-size: 0.84rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    /* ── Divider ── */
-    .divider { border-color: var(--leaf); }
-
-    /* Scrollbar */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: var(--forest); }
-    ::-webkit-scrollbar-thumb { background: var(--leaf); border-radius: 3px; }
+    .tag { display: inline-block; font-size: .7rem; padding: 2px 8px; border-radius: 20px; background: var(--leaf); color: var(--lime); }
+    .mono { font-family: monospace; font-size: .78rem; color: var(--sage); }
   </style>
 </head>
 <body>
-<div class="content max-w-4xl mx-auto px-4 py-8">
+<div class="content max-w-3xl mx-auto px-4 py-8">
 
-  <!-- ── Header ── -->
+  <!-- Header -->
   <div class="text-center mb-8">
-    <div class="text-5xl mb-2">🌿</div>
-    <h1 class="text-3xl font-bold tracking-tight" style="font-family:'Playfair Display',serif;">HomeGrow <em>AI</em></h1>
-    <p class="text-sm mt-1" style="color:var(--sage);letter-spacing:0.1em;text-transform:uppercase;">Dev Test Console · AI Engine v1.0</p>
-    <div id="health-dot" class="mt-3 flex items-center justify-center gap-2 text-xs" style="color:var(--parchment);">
-      <span class="inline-block w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
-      Checking service…
-    </div>
+    <h1 style="font-family:'Playfair Display',serif; font-size:2rem; color:var(--amber-lt);">🌿 HomeGrow AI</h1>
+    <p style="color:var(--sage); font-size:.85rem; margin-top:4px;">Dev Test Console — Direct FastAPI + MongoDB</p>
   </div>
 
-  <!-- ── Tabs ── -->
-  <div class="flex gap-1 mb-0">
-    <button class="tab-btn active" onclick="switchTab('recommend')" id="tab-recommend">🌱 Recommend</button>
-    <button class="tab-btn" onclick="switchTab('diagnose')"  id="tab-diagnose">🔬 Diagnose</button>
+  <!-- Health bar -->
+  <div class="status-bar mb-6" id="healthBar">
+    <div class="dot dot-yellow" id="healthDot"></div>
+    <span id="healthText">Checking service…</span>
+    <button class="btn-secondary ml-auto" style="padding:4px 12px;font-size:.75rem;" onclick="checkHealth()">Refresh</button>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-       RECOMMEND PANEL
-  ═══════════════════════════════════════════ -->
-  <div id="panel-recommend" class="card" style="border-radius:0 12px 12px 12px;">
-
-    <h2 class="text-lg mb-4" style="color:var(--amber-lt);">Plant Recommendation</h2>
-
-    <div class="grid grid-cols-2 gap-4 mb-4" id="rec-form">
-
-      <div>
-        <label>Location</label>
-        <select id="r-location">
-          <option value="Balcony">Balcony</option>
-          <option value="Windowsill">Windowsill</option>
-          <option value="Rooftop">Rooftop</option>
-          <option value="Indoor">Indoor</option>
-        </select>
-      </div>
-
-      <div>
-        <label>Sunlight</label>
-        <select id="r-sunlight">
-          <option value="Full Sun">Full Sun</option>
-          <option value="Partial Shade">Partial Shade</option>
-          <option value="Low Light">Low Light</option>
-        </select>
-      </div>
-
-      <div class="col-span-2">
-        <label>Goal</label>
-        <select id="r-goal">
-          <option value="Cooking herbs">Cooking Herbs</option>
-          <option value="Vegetables">Vegetables</option>
-          <option value="Low maintenance">Low Maintenance</option>
-          <option value="Fruits">Fruits</option>
-        </select>
-      </div>
-
-    </div>
-
-    <div class="mb-4">
-      <label>Mock Plants (from MongoDB) — edit freely</label>
-      <textarea id="r-plants" rows="7" style="font-family:monospace;font-size:0.78rem;">[
-  { "name": "Thai Basil",     "category": "herb",      "difficulty": "Easy",     "minSunlight": 4 },
-  { "name": "Chili Pepper",   "category": "vegetable", "difficulty": "Moderate", "minSunlight": 6 },
-  { "name": "Water Spinach",  "category": "leafy",     "difficulty": "Easy",     "minSunlight": 3 },
-  { "name": "Cherry Tomato",  "category": "vegetable", "difficulty": "Moderate", "minSunlight": 6 },
-  { "name": "Pandan Leaf",    "category": "herb",      "difficulty": "Easy",     "minSunlight": 3 }
-]</textarea>
-    </div>
-
-    <div class="flex items-center gap-4">
-      <button class="btn-primary" onclick="submitRecommend()" id="btn-rec">Get Recommendations →</button>
-      <span style="font-size:0.78rem;color:var(--sage);">POST /ai/recommend</span>
-    </div>
-
-    <!-- Results -->
-    <div id="rec-result" class="mt-6"></div>
+  <!-- Tabs -->
+  <div style="display:flex;gap:8px;margin-bottom:24px;">
+    <button class="tab-btn active" style="flex:1;padding:10px;border-radius:8px;font-family:inherit;font-size:.9rem;cursor:pointer;border:none;" onclick="switchTab('recommend',this)">🌱 Recommend</button>
+    <button class="tab-btn" style="flex:1;padding:10px;border-radius:8px;font-family:inherit;font-size:.9rem;cursor:pointer;border:none;" onclick="switchTab('diagnose',this)">🔬 Diagnose</button>
+    <button class="tab-btn" style="flex:1;padding:10px;border-radius:8px;font-family:inherit;font-size:.9rem;cursor:pointer;border:none;" onclick="switchTab('plants',this)">📋 Plants DB</button>
   </div>
 
-  <!-- ═══════════════════════════════════════════
-       DIAGNOSE PANEL
-  ═══════════════════════════════════════════ -->
-  <div id="panel-diagnose" class="card" style="border-radius:0 12px 12px 12px; display:none;">
-
-    <h2 class="text-lg mb-4" style="color:var(--amber-lt);">Plant Diagnosis</h2>
-
-    <div class="mb-4">
-      <label>Plant Image</label>
-      <input type="file" id="d-image" accept="image/*" onchange="previewImage(event)" style="padding:0.45rem;" />
-      <img id="img-preview" src="" alt="preview" class="mt-3" />
-    </div>
-
-    <div class="grid grid-cols-2 gap-4 mb-4">
-      <div>
-        <label>Crop Type (optional)</label>
-        <input type="text" id="d-cropType" placeholder="e.g. Tomato, Thai Basil" />
+  <!-- ===================== RECOMMEND TAB ===================== -->
+  <div id="tab-recommend">
+    <div class="card p-6 mb-4">
+      <h2 style="font-size:1rem;font-weight:500;color:var(--amber);margin-bottom:16px;">POST /api/recommend</h2>
+      <div style="display:grid;gap:14px;">
+        <div>
+          <label>User ID (optional MongoDB ObjectId)</label>
+          <input type="text" id="rec-userId" placeholder="65f1a2b3c4d5e6f7a8b9c001" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label>Location / Space Type</label>
+            <select id="rec-location">
+              <option>Balcony</option>
+              <option>Indoor</option>
+              <option>Rooftop</option>
+              <option>Windowsill</option>
+              <option>Garden</option>
+            </select>
+          </div>
+          <div>
+            <label>Sunlight Level</label>
+            <select id="rec-sunlight">
+              <option>Full Sun</option>
+              <option>Partial Shade</option>
+              <option>Low Light</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label>Growing Goal</label>
+          <input type="text" id="rec-goal" value="Cooking herbs" placeholder="e.g. Cooking herbs, Low maintenance, Vegetables" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <div>
+            <label>Sunlight Hours / day</label>
+            <input type="number" id="rec-sunlightHours" placeholder="6" min="0" max="24" step="0.5" />
+          </div>
+          <div>
+            <label>Temperature (°C)</label>
+            <input type="number" id="rec-temperature" placeholder="28" min="0" max="50" />
+          </div>
+          <div>
+            <label>Humidity (%)</label>
+            <input type="number" id="rec-humidity" placeholder="70" min="0" max="100" />
+          </div>
+        </div>
+        <button class="btn-primary" id="recBtn" onclick="runRecommend()">Get Recommendations</button>
       </div>
-      <div>
-        <label>Growth Stage</label>
-        <select id="d-growthStage">
-          <option value="Unknown">Unknown</option>
-          <option value="Seedling">Seedling</option>
-          <option value="Vegetative">Vegetative</option>
-          <option value="Flowering">Flowering</option>
-          <option value="Fruiting">Fruiting</option>
-        </select>
-      </div>
     </div>
-
-    <div class="mb-4">
-      <label>Observed Symptoms (optional)</label>
-      <textarea id="d-symptoms" rows="3" placeholder="e.g. Yellow leaves with brown circular spots starting at the bottom of the plant…"></textarea>
-    </div>
-
-    <div class="flex items-center gap-4">
-      <button class="btn-primary" onclick="submitDiagnose()" id="btn-diag">Diagnose Plant →</button>
-      <span style="font-size:0.78rem;color:var(--sage);">POST /ai/diagnose</span>
-    </div>
-
-    <!-- Results -->
-    <div id="diag-result" class="mt-6"></div>
+    <div id="rec-result"></div>
   </div>
 
-  <!-- Footer -->
-  <p class="text-center mt-6" style="font-size:0.72rem;color:var(--leaf);letter-spacing:0.06em;">
-    HOMEGROW AI ENGINE · PERSON C · HACKATHON DEV CONSOLE
-  </p>
+  <!-- ===================== DIAGNOSE TAB ===================== -->
+  <div id="tab-diagnose" style="display:none;">
+    <div class="card p-6 mb-4">
+      <h2 style="font-size:1rem;font-weight:500;color:var(--amber);margin-bottom:16px;">POST /api/diagnose</h2>
+      <div style="display:grid;gap:14px;">
+        <div>
+          <label>User ID (optional)</label>
+          <input type="text" id="diag-userId" placeholder="65f1a2b3c4d5e6f7a8b9c001" />
+        </div>
+        <div>
+          <label>Plant Image</label>
+          <input type="file" id="diag-file" accept="image/*" onchange="previewImage(this)" style="padding:8px;" />
+          <img id="diag-preview" src="" alt="" style="display:none;max-height:180px;border-radius:8px;margin-top:8px;border:1px solid var(--leaf);" />
+        </div>
+        <div>
+          <label>Image URL (optional — stored in DB if no file)</label>
+          <input type="text" id="diag-imageUrl" placeholder="https://example.com/leaf.jpg" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label>Crop Type</label>
+            <input type="text" id="diag-cropType" value="Tomato" placeholder="e.g. Tomato, Chilli, Basil" />
+          </div>
+          <div>
+            <label>Growth Stage</label>
+            <select id="diag-growthStage">
+              <option>Seedling</option>
+              <option>Vegetative</option>
+              <option selected>Flowering</option>
+              <option>Fruiting</option>
+              <option>Mature</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label>Symptoms / Issue</label>
+          <input type="text" id="diag-symptoms" value="Yellowing leaves" placeholder="Describe what you see…" />
+        </div>
+        <button class="btn-primary" id="diagBtn" onclick="runDiagnose()">Analyse Plant</button>
+      </div>
+    </div>
+    <div id="diag-result"></div>
+  </div>
+
+  <!-- ===================== PLANTS TAB ===================== -->
+  <div id="tab-plants" style="display:none;">
+    <div class="card p-6 mb-4" style="display:flex;align-items:center;justify-content:space-between;">
+      <div>
+        <h2 style="font-size:1rem;font-weight:500;color:var(--amber);">GET /api/plants</h2>
+        <p style="font-size:.8rem;color:var(--sage);margin-top:2px;">All plants in MongoDB</p>
+      </div>
+      <button class="btn-secondary" onclick="loadPlants()">Load Plants</button>
+    </div>
+    <div id="plants-result"></div>
+  </div>
 
 </div>
 
 <script>
-  const API = 'http://localhost:8000';
+const BASE = 'http://localhost:8000';
 
-  // ── Health check ──────────────────────────────────────────────────────────
-  (async () => {
-    const dot = document.getElementById('health-dot');
-    try {
-      const r = await fetch(`${API}/health`);
-      const d = await r.json();
-      dot.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-green-500"></span>
-        Service online · model: <strong style="color:var(--lime)">${d.model || 'claude-opus-4-6'}</strong>`;
-    } catch {
-      dot.innerHTML = `<span class="inline-block w-2 h-2 rounded-full bg-red-500"></span>
-        <span style="color:#ef9a9a">Cannot reach http://localhost:8000 — is uvicorn running?</span>`;
-    }
-  })();
+// ── Tab switching ──────────────────────────────────────────────
+function switchTab(name, btn) {
+  ['recommend','diagnose','plants'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t === name ? '' : 'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
 
-  // ── Tab switching ─────────────────────────────────────────────────────────
-  function switchTab(tab) {
-    ['recommend','diagnose'].forEach(t => {
-      document.getElementById(`panel-${t}`).style.display = t === tab ? 'block' : 'none';
-      document.getElementById(`tab-${t}`).classList.toggle('active', t === tab);
+// ── Health check ───────────────────────────────────────────────
+async function checkHealth() {
+  const dot = document.getElementById('healthDot');
+  const txt = document.getElementById('healthText');
+  dot.className = 'dot dot-yellow';
+  txt.textContent = 'Checking…';
+  try {
+    const r = await fetch(BASE + '/health');
+    const d = await r.json();
+    const dbOk = d.db === 'connected';
+    dot.className = 'dot ' + (dbOk ? 'dot-green' : 'dot-yellow');
+    txt.textContent = `Service online · model: ${d.model} · DB: ${d.db}${d.dbError ? ' — ' + d.dbError : ''}`;
+  } catch(e) {
+    dot.className = 'dot dot-red';
+    txt.textContent = 'Service offline — ' + e.message;
+  }
+}
+
+// ── Recommend ─────────────────────────────────────────────────
+async function runRecommend() {
+  const btn = document.getElementById('recBtn');
+  const out = document.getElementById('rec-result');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  out.innerHTML = '';
+
+  const body = {
+    location: document.getElementById('rec-location').value,
+    sunlight: document.getElementById('rec-sunlight').value,
+    goal: document.getElementById('rec-goal').value,
+  };
+  const uid = document.getElementById('rec-userId').value.trim();
+  if (uid) body.userId = uid;
+  const sh = document.getElementById('rec-sunlightHours').value;
+  if (sh) body.sunlightHours = parseFloat(sh);
+  const temp = document.getElementById('rec-temperature').value;
+  if (temp) body.temperature = parseFloat(temp);
+  const hum = document.getElementById('rec-humidity').value;
+  if (hum) body.humidity = parseFloat(hum);
+
+  try {
+    const r = await fetch(BASE + '/api/recommend', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
     });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.statusText);
+    out.innerHTML = renderRecommendResult(d);
+  } catch(e) {
+    out.innerHTML = `<div class="err">⚠ ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Get Recommendations';
+  }
+}
+
+function renderRecommendResult(d) {
+  const plants = d.plants || [];
+  let html = `<div style="margin-bottom:10px;"><span class="mono">recommendationId: ${d.recommendationId || 'n/a'}</span></div>`;
+  if (!plants.length) return html + '<div class="err">No plants returned.</div>';
+  html += plants.map(p => `
+    <div class="plant-card mb-3">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="font-size:2rem;">${p.emoji || '🌱'}</span>
+        <div style="flex:1;">
+          <div style="font-size:1rem;font-weight:500;">${p.name}</div>
+          <div style="font-size:.78rem;color:var(--sage);font-style:italic;">${p.botanicalName || ''}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:1.2rem;font-weight:700;color:var(--amber-lt);">${p.successRate}%</div>
+          <div style="font-size:.7rem;color:var(--sage);">match</div>
+        </div>
+      </div>
+      <div class="score-bar mb-3"><div class="score-fill" style="width:${p.successRate}%"></div></div>
+      <p style="font-size:.85rem;color:var(--parchment);margin-bottom:10px;">${p.reason}</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+        <span class="tag">${p.category}</span>
+        <span class="tag">${p.difficulty}</span>
+        <span class="tag">${p.spaceType}</span>
+      </div>
+      ${p.careTips ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:.78rem;">
+        <div style="background:var(--canopy);border-radius:6px;padding:8px;text-align:center;">
+          <div style="color:var(--sage);">💧 Water</div>
+          <div style="color:var(--cream);margin-top:2px;">${p.careTips.waterFreq || '—'}</div>
+        </div>
+        <div style="background:var(--canopy);border-radius:6px;padding:8px;text-align:center;">
+          <div style="color:var(--sage);">☀️ Sun</div>
+          <div style="color:var(--cream);margin-top:2px;">${p.careTips.sunNeeds || '—'}</div>
+        </div>
+        <div style="background:var(--canopy);border-radius:6px;padding:8px;text-align:center;">
+          <div style="color:var(--sage);">📅 Grow</div>
+          <div style="color:var(--cream);margin-top:2px;">${p.careTips.growTime ? p.careTips.growTime + ' days' : '—'}</div>
+        </div>
+      </div>` : ''}
+      <div style="margin-top:8px;"><span class="mono">plantId: ${p.plantId}</span></div>
+    </div>
+  `).join('');
+  return html;
+}
+
+// ── Diagnose ──────────────────────────────────────────────────
+let _base64Image = null;
+
+function previewImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    _base64Image = e.target.result;
+    const prev = document.getElementById('diag-preview');
+    prev.src = e.target.result;
+    prev.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function runDiagnose() {
+  const btn = document.getElementById('diagBtn');
+  const out = document.getElementById('diag-result');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  out.innerHTML = '';
+
+  const body = {
+    cropType: document.getElementById('diag-cropType').value,
+    growthStage: document.getElementById('diag-growthStage').value,
+    symptoms: document.getElementById('diag-symptoms').value,
+  };
+  const uid = document.getElementById('diag-userId').value.trim();
+  if (uid) body.userId = uid;
+  const imgUrl = document.getElementById('diag-imageUrl').value.trim();
+  if (imgUrl) body.imageUrl = imgUrl;
+  if (_base64Image) body.image = _base64Image;
+
+  if (!body.image && !body.imageUrl) {
+    out.innerHTML = '<div class="err">⚠ Please upload an image or provide an image URL.</div>';
+    btn.disabled = false;
+    btn.textContent = 'Analyse Plant';
+    return;
   }
 
-  // ── Image preview ─────────────────────────────────────────────────────────
-  let imageBase64 = null;
-  function previewImage(e) {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const dataUrl = ev.target.result;
-      // Store raw base64 (strip data URL prefix)
-      imageBase64 = dataUrl.split(',')[1];
-      const preview = document.getElementById('img-preview');
-      preview.src = dataUrl;
-      preview.style.display = 'block';
-    };
-    reader.readAsDataURL(file);
+  try {
+    const r = await fetch(BASE + '/api/diagnose', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || r.statusText);
+    out.innerHTML = renderDiagnoseResult(d);
+  } catch(e) {
+    out.innerHTML = `<div class="err">⚠ ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Analyse Plant';
   }
+}
 
-  // ── Spinner / Error helpers ───────────────────────────────────────────────
-  function showSpinner(containerId) {
-    document.getElementById(containerId).innerHTML =
-      `<div class="flex flex-col items-center gap-3 py-6">
-         <div class="spinner"></div>
-         <p style="font-size:0.82rem;color:var(--sage);">Consulting Claude AI…</p>
-       </div>`;
-  }
+function renderDiagnoseResult(d) {
+  const ai = d.aiResult || {};
+  const sev = (ai.severity || 'Low').toLowerCase();
+  const sevClass = sev === 'high' ? 'severity-high' : sev === 'moderate' ? 'severity-moderate' : 'severity-low';
+  const conf = ai.confidenceScore || 0;
+  return `
+    <div class="card p-5">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div>
+          <div style="font-size:1.1rem;font-weight:600;">${ai.problem || 'Unknown'}</div>
+          <div style="font-size:.8rem;color:var(--sage);margin-top:2px;">${d.cropType} · ${d.growthStage}</div>
+        </div>
+        <span style="font-size:.8rem;padding:4px 12px;border-radius:20px;" class="${sevClass}">${ai.severity}</span>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:.75rem;color:var(--sage);margin-bottom:4px;">CONFIDENCE</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="score-bar" style="flex:1;"><div class="score-fill" style="width:${conf}%"></div></div>
+          <span style="font-size:.9rem;font-weight:600;color:var(--amber-lt);white-space:nowrap;">${conf}%</span>
+        </div>
+      </div>
+      <div style="display:grid;gap:10px;font-size:.85rem;">
+        <div><span style="color:var(--sage);">Cause: </span>${ai.cause}</div>
+        <div><span style="color:var(--sage);">Solution: </span>${ai.solution}</div>
+        ${d.flaggedForReview ? '<div style="color:var(--amber);">⚠ Flagged for expert review (low confidence)</div>' : ''}
+      </div>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--moss);">
+        <span class="mono">diagnosisId: ${d.diagnosisId || 'n/a'}</span>
+      </div>
+    </div>
+  `;
+}
 
-  function showError(containerId, msg) {
-    document.getElementById(containerId).innerHTML =
-      `<div class="error-box">⚠ ${msg}</div>`;
-  }
-
-  // ── RECOMMEND ─────────────────────────────────────────────────────────────
-  async function submitRecommend() {
-    const btn = document.getElementById('btn-rec');
-    const out = document.getElementById('rec-result');
-
-    // Parse mock plants
-    let availablePlants = [];
-    try {
-      availablePlants = JSON.parse(document.getElementById('r-plants').value);
-      if (!Array.isArray(availablePlants)) throw new Error('Must be a JSON array');
-    } catch (e) {
-      showError('rec-result', `Invalid JSON in Mock Plants: ${e.message}`);
-      return;
-    }
-
-    const userInput = {
-      location: document.getElementById('r-location').value,
-      sunlight: document.getElementById('r-sunlight').value,
-      goal:     document.getElementById('r-goal').value,
-    };
-
-    btn.disabled = true;
-    showSpinner('rec-result');
-
-    try {
-      const res = await fetch(`${API}/ai/recommend`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userInput, availablePlants }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(`HTTP ${res.status}: ${err.detail || res.statusText}`);
-      }
-
-      const data = await res.json();
-      renderRecommendations(data.recommendedPlants || []);
-    } catch (e) {
-      showError('rec-result', e.message);
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  function renderRecommendations(plants) {
+// ── Plants DB ─────────────────────────────────────────────────
+async function loadPlants() {
+  const out = document.getElementById('plants-result');
+  out.innerHTML = '<div class="status-bar"><div class="dot dot-yellow"></div>Loading plants from MongoDB…</div>';
+  try {
+    const r = await fetch(BASE + '/api/plants');
+    const plants = await r.json();
+    if (!r.ok) throw new Error(plants.detail || r.statusText);
     if (!plants.length) {
-      document.getElementById('rec-result').innerHTML =
-        `<p style="color:var(--sage);font-size:0.88rem;">No plants returned.</p>`;
+      out.innerHTML = '<div class="err">No plants found in database.</div>';
       return;
     }
-
-    const html = `
-      <hr class="divider mb-5" />
-      <h3 class="text-base mb-4" style="color:var(--parchment);font-family:'Playfair Display',serif;">
-        ${plants.length} Recommendation${plants.length > 1 ? 's' : ''} · Ranked by Suitability
-      </h3>
-      <div class="flex flex-col gap-4">
-        ${plants.map((p, i) => {
-          const cg = p.careGuide || {};
-          return `
-          <div class="plant-card">
-            <div class="flex items-start justify-between p-4 pb-3" style="border-bottom:1px solid var(--leaf);">
-              <div>
-                <h3 style="font-family:'Playfair Display',serif;font-size:1.05rem;font-weight:700;">🌱 Plant #${i+1}</h3>
-                <p style="font-size:0.75rem;color:var(--sage);margin-top:0.2rem;">${p.reason || ''}</p>
-              </div>
-              <div class="text-right">
-                <span style="font-size:1.5rem;font-weight:700;color:var(--lime);">${p.score}%</span>
-                <p style="font-size:0.65rem;color:var(--sage);text-transform:uppercase;letter-spacing:0.07em;">match score</p>
-              </div>
-            </div>
-            <div class="p-4">
-              <div class="success-bar-track mb-4">
-                <div class="success-bar-fill" style="width:${p.score}%;"></div>
-              </div>
-              <div class="grid grid-cols-2 gap-2 mb-4">
-                <div class="stat-pill">
-                  <span class="stat-label">💧 Water</span>
-                  <span style="color:var(--cream);font-size:0.82rem;">${cg.waterFreq || '—'}</span>
-                </div>
-                <div class="stat-pill">
-                  <span class="stat-label">☀️ Sunlight</span>
-                  <span style="color:var(--cream);font-size:0.82rem;">${cg.sunNeeds || '—'}</span>
-                </div>
-                <div class="stat-pill">
-                  <span class="stat-label">⏱ Grow Time</span>
-                  <span style="color:var(--cream);font-size:0.82rem;">${cg.growTime || '—'}</span>
-                </div>
-                <div class="stat-pill">
-                  <span class="stat-label">🪴 Pot Size</span>
-                  <span style="color:var(--cream);font-size:0.82rem;">${cg.potSize || '—'}</span>
-                </div>
-              </div>
-              <div class="stat-pill mb-3" style="display:block;">
-                <span class="stat-label">🌍 Soil Mix</span>
-                <span style="color:var(--cream);font-size:0.82rem;">${cg.soilMix || '—'}</span>
-              </div>
-              <div class="stat-pill mb-4" style="display:block;">
-                <span class="stat-label">🧪 Fertilizer</span>
-                <span style="color:var(--cream);font-size:0.82rem;">${cg.fertilizerNeeded || '—'}</span>
-              </div>
-              <div class="calendar-toggle flex items-center gap-2" onclick="toggleCalendar('cal-${i}', this)">
-                <span style="font-size:0.78rem;color:var(--sage);text-transform:uppercase;letter-spacing:0.07em;">📅 Growing Calendar</span>
-                <span id="cal-arrow-${i}" style="color:var(--sage);font-size:0.75rem;transition:transform 0.2s;">▼</span>
-              </div>
-              <div class="calendar-body" id="cal-${i}">
-                ${(p.calendar || []).map(c => `
-                  <div class="cal-entry">
-                    <span class="cal-week">${c.week}</span>
-                    <p class="cal-title">${c.title}</p>
-                    <p class="cal-desc">${c.description}</p>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>`;
-
-    document.getElementById('rec-result').innerHTML = html;
-  }
-
-  function toggleCalendar(id, btn) {
-    const body  = document.getElementById(id);
-    const arrow = document.getElementById(`cal-arrow-${id.split('-')[1]}`);
-    const open  = body.classList.toggle('open');
-    if (arrow) arrow.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
-  }
-
-  // ── DIAGNOSE ─────────────────────────────────────────────────────────────
-  async function submitDiagnose() {
-    const btn = document.getElementById('btn-diag');
-    const out = document.getElementById('diag-result');
-
-    if (!imageBase64) {
-      showError('diag-result', 'Please select a plant image first.');
-      return;
-    }
-
-    const payload = {
-      image:       imageBase64,
-      cropType:    document.getElementById('d-cropType').value || 'Unknown',
-      growthStage: document.getElementById('d-growthStage').value,
-      issue:       document.getElementById('d-symptoms').value || '',
-    };
-
-    btn.disabled = true;
-    showSpinner('diag-result');
-
-    try {
-      const res = await fetch(`${API}/ai/diagnose`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(`HTTP ${res.status}: ${err.detail || res.statusText}`);
-      }
-
-      const data = await res.json();
-      renderDiagnosis(data);
-    } catch (e) {
-      showError('diag-result', e.message);
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
-  function renderDiagnosis(d) {
-    const ai = d.aiResult || {};
-    const sevColor = { Low: 'badge-green', Moderate: 'badge-amber', High: 'badge-red' };
-    const confidence = ai.confidenceScore || 0;
-    const confClass = confidence >= 75 ? 'conf-high' : confidence >= 50 ? 'conf-mid' : 'conf-low';
-    const confPct   = Math.max(2, confidence);
-
-    const flagBanner = d.flaggedForReview
-      ? `<div class="warn-banner mb-4">
-           ⚠️ <strong>Flagged for Review</strong> — confidence is below 75%. Consider consulting a local expert.
-         </div>`
-      : '';
-
-    const html = `
-      <hr class="divider mb-5" />
-      <div class="plant-card" style="animation: fadeUp 0.4s ease;">
-        <div class="p-4 pb-3" style="border-bottom:1px solid var(--leaf);">
-          <div class="flex items-start justify-between gap-3 mb-2">
-            <div>
-              <h3 style="font-family:'Playfair Display',serif;font-size:1.2rem;font-weight:700;">${ai.problem || 'Unknown'}</h3>
-              <div class="flex gap-2 mt-1 flex-wrap">
-                <span class="badge ${sevColor[ai.severity] || 'badge-amber'}">Severity: ${ai.severity || '—'}</span>
-              </div>
-            </div>
-            <div class="text-right shrink-0">
-              <span style="font-size:1.6rem;font-weight:700;color:${confidence >= 75 ? 'var(--lime)' : confidence >= 50 ? 'var(--amber-lt)' : '#ef9a9a'};">
-                ${confidence}%
-              </span>
-              <p style="font-size:0.65rem;color:var(--sage);text-transform:uppercase;letter-spacing:0.07em;">confidence</p>
+    out.innerHTML = `
+      <div style="margin-bottom:10px;font-size:.8rem;color:var(--sage);">${plants.length} plants found</div>
+      ${plants.map(p => `
+        <div class="plant-card mb-3" style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:1.8rem;">${p.emoji || '🌱'}</span>
+          <div style="flex:1;">
+            <div style="font-weight:500;">${p.name}</div>
+            <div style="font-size:.78rem;color:var(--sage);font-style:italic;">${p.botanicalName || ''}</div>
+            <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;">
+              <span class="tag">${p.category}</span>
+              <span class="tag">${p.difficulty}</span>
+              <span class="tag">${p.spaceType}</span>
             </div>
           </div>
-          <div class="conf-bar-track">
-            <div class="conf-bar-fill ${confClass}" style="width:${confPct}%;"></div>
+          <div style="text-align:right;">
+            <div class="mono">${p._id}</div>
           </div>
         </div>
-
-        <div class="p-4">
-          ${flagBanner}
-
-          <div class="mb-4">
-            <p style="font-size:0.72rem;color:var(--sage);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">Cause</p>
-            <p style="font-size:0.88rem;color:var(--parchment);line-height:1.65;">${ai.cause || '—'}</p>
-          </div>
-
-          <div class="mb-4">
-            <p style="font-size:0.72rem;color:var(--sage);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">Treatment</p>
-            <p style="font-size:0.88rem;color:var(--cream);line-height:1.65;">${ai.solution || '—'}</p>
-          </div>
-        </div>
-      </div>`;
-
-    document.getElementById('diag-result').innerHTML = html;
+      `).join('')}
+    `;
+  } catch(e) {
+    out.innerHTML = `<div class="err">⚠ ${e.message}</div>`;
   }
+}
+
+// ── Init ───────────────────────────────────────────────────────
+checkHealth();
 </script>
 </body>
 </html>

@@ -6,8 +6,11 @@ Shared utility functions for the HomeGrow AI Engine.
 import json
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
+
+from bson import ObjectId
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +35,8 @@ def load_prompt(filename: str) -> str:
 
 def strip_json_fences(text: str) -> str:
     text = text.strip()
-    # Remove ```json ... ``` or ``` ... ``` blocks
     text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\n?```\s*$", "", text)
-    # Remove bare 'json' prefix before {
     text = re.sub(r"^json\s*(?=\{)", "", text, flags=re.IGNORECASE)
     return text.strip()
 
@@ -45,7 +46,6 @@ def parse_json_safe(text: str) -> Optional[dict]:
         logger.warning("parse_json_safe received empty string.")
         return None
 
-    # Gemini sometimes emits \' (invalid JSON) — normalise to plain '
     text = text.replace("\\'", "'")
 
     def _try_parse(s: str) -> Optional[dict]:
@@ -57,18 +57,15 @@ def parse_json_safe(text: str) -> Optional[dict]:
             pass
         return None
 
-    # Attempt 1: direct parse
     result = _try_parse(text)
     if result:
         return result
 
-    # Attempt 2: strip fences and retry (in case they weren't stripped earlier)
     cleaned = strip_json_fences(text)
     result = _try_parse(cleaned)
     if result:
         return result
 
-    # Attempt 3: extract first outermost { ... } block
     match = re.search(r"\{.*\}", text, re.DOTALL)
     if match:
         result = _try_parse(match.group(0))
@@ -81,7 +78,7 @@ def parse_json_safe(text: str) -> Optional[dict]:
 
 
 def clamp_confidence(value: int) -> int:
-    """Clamp confidence score to [10, 98] to avoid misleading 0% or 100% extremes."""
+    """Clamp confidence score to [10, 98]."""
     return max(10, min(98, value))
 
 
@@ -97,3 +94,27 @@ def extract_base64_data(image_str: str) -> Tuple[str, str]:
         media_type = "image/jpeg" if raw_mime == "image/jpg" else raw_mime
         return media_type, match.group(2).strip()
     return "image/jpeg", image_str
+
+
+def _serialize_value(v: Any) -> Any:
+    if isinstance(v, ObjectId):
+        return str(v)
+    if isinstance(v, datetime):
+        return v.isoformat()
+    if isinstance(v, dict):
+        return serialize_doc(v)
+    if isinstance(v, list):
+        return [_serialize_value(i) for i in v]
+    return v
+
+
+def serialize_doc(doc: Optional[dict]) -> Optional[dict]:
+    """Recursively convert ObjectId/datetime values to JSON-safe types."""
+    if doc is None:
+        return None
+    return {k: _serialize_value(v) for k, v in doc.items()}
+
+
+def serialize_list(docs: list) -> list:
+    """Serialize a list of MongoDB documents."""
+    return [serialize_doc(d) for d in docs]

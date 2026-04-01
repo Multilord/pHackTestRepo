@@ -1,6 +1,11 @@
 """
 routes/diagnose.py
-POST /ai/diagnose
+POST /api/diagnose
+
+Architecture: FastAPI -> Gemini Vision AI -> MongoDB Atlas
+- Analyses plant image with Gemini Vision
+- Saves diagnosis to MongoDB diagnoses collection
+- Returns the saved diagnosis document
 """
 
 import base64
@@ -9,12 +14,15 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
-from google import genai
-from google.genai import types
+from bson import ObjectId
+from bson.errors import InvalidId
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
+from google import genai
+from google.genai import types
 from pydantic import BaseModel, Field
 
+from utils.db import get_db
 from utils.helpers import (
     clamp_confidence,
     extract_base64_data,
@@ -22,7 +30,6 @@ from utils.helpers import (
     parse_json_safe,
     strip_json_fences,
 )
-from utils.db import get_db
 
 load_dotenv()
 
@@ -35,56 +42,37 @@ _VALID_SEVERITIES = frozenset({"Low", "Moderate", "High"})
 
 
 # ---------------------------------------------------------------------------
-# Pydantic request model
+# Request model
 # ---------------------------------------------------------------------------
 
 
 class DiagnoseRequest(BaseModel):
-    image: str = Field(
-        ...,
-        description="Base64-encoded plant image. Accepts raw base64 or data URL (data:image/jpeg;base64,...).",
+    userId: Optional[str] = Field(None, description="MongoDB user _id (optional)")
+    image: Optional[str] = Field(
+        None,
+        description="Base64-encoded plant image. Accepts raw base64 or data URL.",
     )
+    imageUrl: Optional[str] = Field(None, description="Public URL of the image (stored in DB)")
     cropType: Optional[str] = Field(None, description="Plant type e.g. 'Tomato', 'Chilli'")
     growthStage: Optional[str] = Field(None, description="Growth stage e.g. 'Seedling', 'Flowering'")
-    issue: Optional[str] = Field(None, description="Reported symptom e.g. 'Yellowing leaves'")
-    userId: Optional[str] = Field(None, description="MongoDB user _id (optional, for saving to diagnoses collection)")
+    symptoms: Optional[str] = Field(None, description="Reported symptom description")
 
 
 # ---------------------------------------------------------------------------
-# Pydantic response models
+# Fallback diagnosis (when AI is unavailable or response is unparseable)
 # ---------------------------------------------------------------------------
 
 
-class AIResult(BaseModel):
-    problem: str
-    cause: str
-    severity: str
-    solution: str
-    confidenceScore: int
-
-
-class DiagnoseResponse(BaseModel):
-    aiResult: AIResult
-    flaggedForReview: bool
-
-
-# ---------------------------------------------------------------------------
-# Fallback — returned when Gemini is unavailable or response is unparseable
-# ---------------------------------------------------------------------------
-
-_FALLBACK = DiagnoseResponse(
-    aiResult=AIResult(
-        problem="Unable to Determine",
-        cause="The AI could not analyse the image at this time.",
-        severity="Low",
-        solution=(
-            "Retake the photo in good natural light with the affected area clearly visible. "
-            "If symptoms persist, consult a local plant nursery or agricultural officer."
-        ),
-        confidenceScore=20,
+_FALLBACK_AI_RESULT = {
+    "problem": "Unable to Determine",
+    "cause": "The AI could not analyse the image at this time.",
+    "severity": "Low",
+    "solution": (
+        "Retake the photo in good natural light with the affected area clearly visible. "
+        "If symptoms persist, consult a local plant nursery or agricultural officer."
     ),
-    flaggedForReview=True,
-)
+    "confidenceScore": 20,
+}
 
 
 # ---------------------------------------------------------------------------
@@ -92,31 +80,26 @@ _FALLBACK = DiagnoseResponse(
 # ---------------------------------------------------------------------------
 
 
-def _sanitise_diagnosis(data: dict) -> DiagnoseResponse:
-    ai_raw = data.get("aiResult", {})
-    if not isinstance(ai_raw, dict):
-        ai_raw = {}
-
-    severity = str(ai_raw.get("severity", "Low")).strip().capitalize()
+def _sanitise_ai_result(raw: dict) -> dict:
+    """Validate and sanitise the AI result fields."""
+    severity = str(raw.get("severity", "Low")).strip().capitalize()
     if severity not in _VALID_SEVERITIES:
         logger.warning(f"Invalid severity '{severity}'. Defaulting to 'Low'.")
         severity = "Low"
 
-    raw_score = ai_raw.get("confidenceScore", 50)
+    raw_score = raw.get("confidenceScore", 50)
     try:
         confidence = clamp_confidence(int(raw_score))
     except (TypeError, ValueError):
         confidence = 50
 
-    ai_result = AIResult(
-        problem=str(ai_raw.get("problem", "Unknown Issue")),
-        cause=str(ai_raw.get("cause", "Unknown cause.")),
-        severity=severity,
-        solution=str(ai_raw.get("solution", "Monitor the plant closely.")),
-        confidenceScore=confidence,
-    )
-
-    return DiagnoseResponse(aiResult=ai_result, flaggedForReview=confidence < 75)
+    return {
+        "problem": str(raw.get("problem", "Unknown Issue")),
+        "cause": str(raw.get("cause", "Unknown cause.")),
+        "severity": severity,
+        "solution": str(raw.get("solution", "Monitor the plant closely.")),
+        "confidenceScore": confidence,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -124,89 +107,137 @@ def _sanitise_diagnosis(data: dict) -> DiagnoseResponse:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/diagnose", response_model=DiagnoseResponse)
-async def diagnose_plant(request: DiagnoseRequest) -> DiagnoseResponse:
+@router.post("/diagnose")
+async def diagnose_plant(req: DiagnoseRequest):
     """
-    Analyse a plant image using Gemini Vision and return a structured diagnosis.
-    Person D's backend wraps the result into the diagnoses document and saves to MongoDB.
+    Analyse a plant image using Gemini Vision.
+    Saves the diagnosis to MongoDB diagnoses collection and returns the result.
     """
+    db = get_db()
+
+    # Load prompt
     try:
         system_prompt = load_prompt("diagnose_system.txt")
     except RuntimeError as e:
         logger.error(f"Could not load diagnose prompt: {e}")
         raise HTTPException(status_code=500, detail="AI service configuration error: missing prompt file.")
 
-    if not request.image or not request.image.strip():
-        raise HTTPException(status_code=400, detail="image field is required and must not be empty.")
+    # Validate: need at least an image or imageUrl
+    if not req.image and not req.imageUrl:
+        raise HTTPException(status_code=400, detail="Provide either 'image' (base64) or 'imageUrl'.")
 
+    ai_result = None
+
+    # Run AI analysis if base64 image is provided
+    if req.image and req.image.strip():
+        try:
+            media_type, b64_data = extract_base64_data(req.image)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid image format: {e}")
+
+        if not b64_data:
+            raise HTTPException(status_code=400, detail="Image data is empty after parsing.")
+
+        try:
+            image_bytes = base64.b64decode(b64_data)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not decode image: {e}")
+
+        user_message = (
+            f"Crop Type: {req.cropType or 'Unknown'}\n"
+            f"Growth Stage: {req.growthStage or 'Unknown'}\n"
+            f"Reported Symptoms: {req.symptoms or 'None reported'}\n\n"
+            f"Analyse the image and return your diagnosis strictly as JSON following the schema in your instructions."
+        )
+
+        try:
+            logger.info(
+                f"Calling Gemini ({GEMINI_MODEL}) for diagnosis. "
+                f"Crop: {req.cropType or 'Unknown'}, Stage: {req.growthStage or 'Unknown'}"
+            )
+            client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    max_output_tokens=1024,
+                ),
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=media_type),
+                    user_message,
+                ],
+            )
+            raw_text = response.text
+        except Exception as e:
+            err = str(e)
+            if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                logger.warning(f"Gemini rate limit: {err[:100]}")
+                ai_result = _FALLBACK_AI_RESULT.copy()
+            elif "403" in err or "401" in err or "API_KEY" in err.upper():
+                raise HTTPException(status_code=502, detail="AI service authentication error.")
+            else:
+                logger.error(f"Gemini error: {err[:200]}")
+                ai_result = _FALLBACK_AI_RESULT.copy()
+        else:
+            cleaned = strip_json_fences(raw_text)
+            parsed = parse_json_safe(cleaned)
+
+            if parsed:
+                # Support both flat { problem, ... } and wrapped { aiResult: { ... } }
+                raw_result = parsed.get("aiResult", parsed)
+                ai_result = _sanitise_ai_result(raw_result)
+            else:
+                logger.warning(f"Unparseable AI response. Raw (first 300): {raw_text[:300]!r}")
+                ai_result = _FALLBACK_AI_RESULT.copy()
+    else:
+        # No base64 image — use fallback (imageUrl-only mode, no AI analysis)
+        logger.info("No base64 image provided. Storing imageUrl without AI analysis.")
+        ai_result = _FALLBACK_AI_RESULT.copy()
+
+    flagged_for_review = ai_result["confidenceScore"] < 75
+
+    # Build MongoDB document
+    user_oid = None
+    if req.userId:
+        try:
+            user_oid = ObjectId(req.userId)
+        except InvalidId:
+            logger.warning(f"Invalid userId '{req.userId}' — saving diagnosis without userId.")
+
+    diagnosis_doc = {
+        "cropType": req.cropType or "Unknown",
+        "growthStage": req.growthStage or "Unknown",
+        "issue": req.symptoms or "None reported",
+        "imageUrl": req.imageUrl or None,
+        "aiResult": ai_result,
+        "flaggedForReview": flagged_for_review,
+        "createdAt": datetime.now(timezone.utc),
+    }
+    if user_oid is not None:
+        diagnosis_doc["userId"] = user_oid
+
+    # Save to MongoDB
     try:
-        media_type, b64_data = extract_base64_data(request.image)
-    except Exception as e:
-        logger.error(f"Failed to extract base64 image data: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid image format: {str(e)}")
-
-    if not b64_data:
-        raise HTTPException(status_code=400, detail="Image data is empty after parsing.")
-
-    try:
-        image_bytes = base64.b64decode(b64_data)
-    except Exception as e:
-        logger.error(f"Failed to decode base64 image: {e}")
-        raise HTTPException(status_code=400, detail=f"Could not decode image: {str(e)}")
-
-    user_message = (
-        f"Crop Type: {request.cropType or 'Unknown'}\n"
-        f"Growth Stage: {request.growthStage or 'Unknown'}\n"
-        f"Reported Issue: {request.issue or 'None reported'}\n\n"
-        f"Analyse the image and return your diagnosis strictly as JSON following the schema in your instructions."
-    )
-
-    try:
+        insert_result = await db.diagnoses.insert_one(diagnosis_doc)
+        diagnosis_id = str(insert_result.inserted_id)
         logger.info(
-            f"Calling Gemini ({GEMINI_MODEL}) for plant diagnosis. "
-            f"Crop: {request.cropType or 'Unknown'}, Stage: {request.growthStage or 'Unknown'}"
+            f"Diagnosis saved. _id={diagnosis_id}, "
+            f"problem='{ai_result['problem']}', "
+            f"severity={ai_result['severity']}, "
+            f"confidence={ai_result['confidenceScore']}, "
+            f"flagged={flagged_for_review}"
         )
-        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                max_output_tokens=1024,
-            ),
-            contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type=media_type),
-                user_message,
-            ],
-        )
-        raw_text = response.text
-
     except Exception as e:
-        err = str(e)
-        if "429" in err or "RESOURCE_EXHAUSTED" in err:
-            logger.warning(f"Gemini rate limit hit: {err[:100]}")
-            return _FALLBACK
-        if "403" in err or "401" in err or "API_KEY" in err.upper():
-            logger.error(f"Gemini auth error: {err[:100]}")
-            raise HTTPException(status_code=502, detail="AI service authentication error.")
-        logger.error(f"Unexpected Gemini error: {err[:200]}")
-        return _FALLBACK
+        logger.error(f"Failed to save diagnosis to DB: {e}")
+        diagnosis_id = None
 
-    cleaned_text = strip_json_fences(raw_text)
-    parsed = parse_json_safe(cleaned_text)
-
-    if not parsed:
-        logger.warning(f"Gemini returned unparseable JSON. Raw (first 300): {raw_text[:300]!r}")
-        return _FALLBACK
-
-    try:
-        result = _sanitise_diagnosis(parsed)
-        logger.info(
-            f"Diagnosis complete. Problem: '{result.aiResult.problem}', "
-            f"Severity: {result.aiResult.severity}, "
-            f"Confidence: {result.aiResult.confidenceScore}, "
-            f"Flagged: {result.flaggedForReview}"
-        )
-        return result
-    except Exception as e:
-        logger.error(f"Failed to sanitise Gemini diagnosis output: {e}")
-        return _FALLBACK
+    return {
+        "diagnosisId": diagnosis_id,
+        "cropType": diagnosis_doc["cropType"],
+        "growthStage": diagnosis_doc["growthStage"],
+        "issue": diagnosis_doc["issue"],
+        "imageUrl": diagnosis_doc["imageUrl"],
+        "aiResult": ai_result,
+        "flaggedForReview": flagged_for_review,
+        "createdAt": diagnosis_doc["createdAt"].isoformat(),
+    }

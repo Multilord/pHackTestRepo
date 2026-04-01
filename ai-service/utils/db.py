@@ -1,39 +1,37 @@
 """
 utils/db.py
-MongoDB connection for the HomeGrow AI service.
+Async MongoDB connection for the HomeGrow AI service.
+Uses Motor (AsyncIO) for non-blocking database operations.
 """
 
 import logging
 import os
 import certifi
 from dotenv import load_dotenv
-from pymongo.mongo_client import MongoClient
-from pymongo.server_api import ServerApi
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-_client: MongoClient | None = None
-_db = None
+_client: AsyncIOMotorClient | None = None
+_db: AsyncIOMotorDatabase | None = None
 
 
-def get_db():
-    global _client, _db
-    if _db is not None:
-        return _db
+def get_client() -> AsyncIOMotorClient:
+    global _client
+    if _client is None:
+        uri = os.getenv("MONGODB_URI")
+        if not uri:
+            raise RuntimeError("MONGODB_URI environment variable is not set.")
+        _client = AsyncIOMotorClient(uri, tlsCAFile=certifi.where())
+    return _client
 
-    uri = os.getenv("MONGODB_URI")
-    if not uri:
-        logger.error("MONGODB_URI environment variable is not set.")
-        return None
-    try:
-        _client = MongoClient(uri, server_api=ServerApi("1"), tlsCAFile=certifi.where())
-        _client.admin.command("ping")
-        _db = _client["homegrow"]
-        logger.info("MongoDB connected successfully.")
-    except Exception as e:
-        logger.error(f"MongoDB connection failed: {e}")
-        _db = None
 
+def get_db() -> AsyncIOMotorDatabase:
+    global _db
+    if _db is None:
+        client = get_client()
+        db_name = os.getenv("DB_NAME", "homegrow")
+        _db = client[db_name]
     return _db

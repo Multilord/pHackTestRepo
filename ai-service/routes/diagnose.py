@@ -213,7 +213,6 @@ async def diagnose_plant(req: DiagnoseRequest):
                 model=GEMINI_MODEL,
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
-                    max_output_tokens=2048,
                 ),
                 contents=[
                     types.Part.from_bytes(data=image_bytes, mime_type=media_type),

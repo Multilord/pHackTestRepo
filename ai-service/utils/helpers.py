@@ -73,8 +73,47 @@ def parse_json_safe(text: str) -> Optional[dict]:
             logger.info("Recovered JSON via substring extraction.")
             return result
 
+    # Attempt 4: response was truncated — extract whatever top-level keys completed
+    partial = _extract_partial_json(text)
+    if partial:
+        logger.warning("Recovered partial JSON from truncated response.")
+        return partial
+
     logger.warning(f"Failed to parse JSON. First 300 chars: {text[:300]!r}")
     return None
+
+
+def _extract_partial_json(text: str) -> Optional[dict]:
+    """
+    Last-resort recovery for truncated Gemini responses.
+    Walks the text character by character to extract all fully-formed
+    top-level key:value pairs from an incomplete JSON object.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    result = {}
+    # Match each top-level key and try to decode its value
+    key_re = re.compile(r'"(\w+)"\s*:\s*', re.DOTALL)
+    for m in key_re.finditer(text, start + 1):
+        key = m.group(1)
+        val_start = m.end()
+        first_char = text[val_start:val_start + 1].strip()
+        if not first_char:
+            continue
+        # Find the natural end of this value by trying progressively from max to min
+        for end in range(len(text), val_start, -1):
+            snippet = text[val_start:end].strip().rstrip(",").strip()
+            if not snippet:
+                continue
+            try:
+                val = json.loads(snippet)
+                result[key] = val
+                break
+            except (json.JSONDecodeError, ValueError):
+                continue
+    return result if result else None
 
 
 def clamp_confidence(value: int) -> int:

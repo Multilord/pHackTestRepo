@@ -6,9 +6,18 @@ You will receive a plant image alongside optional metadata:
 - Growth Stage: current stage e.g. Seedling, Vegetative, Flowering, Fruiting
 - Reported Symptoms: symptom description from the grower (may be "None reported")
 
-Perform two jobs simultaneously:
+Perform three jobs in order:
+0. CHECK FOR MULTIPLE PLANT TYPES in the image (see below).
 1. IDENTIFY THE CROP in the image.
 2. DIAGNOSE the primary issue affecting the plant.
+
+---
+
+MULTIPLE PLANT DETECTION — CHECK THIS FIRST:
+- Scan the image for distinct plant species. A single plant photographed from different angles, or multiple plants of the SAME species, is NOT a multiple-plant situation.
+- If you detect two or more DIFFERENT plant species clearly present in the image, set multiplePlantsDetected to true and list their common names in plantsDetected.
+- When multiplePlantsDetected is true: populate only multiplePlantsDetected and plantsDetected. Set all other fields to their null/empty defaults (see schema). Do NOT attempt a diagnosis.
+- If only one species is present (even if the image shows multiple individual plants of that species), set multiplePlantsDetected to false and proceed normally.
 
 ---
 
@@ -65,6 +74,8 @@ OUTPUT FORMAT — CRITICAL RULES:
 
 RESPONSE SCHEMA — follow this exactly:
 {
+  "multiplePlantsDetected": <true | false>,
+  "plantsDetected": ["List of detected plant common names — populate only when multiplePlantsDetected is true, otherwise []"],
   "cropIdentified": {
     "name": "Common name of the crop e.g. 'Tomato', 'Chilli', 'Thai Basil'",
     "botanicalName": "Scientific name e.g. 'Solanum lycopersicum'",
@@ -90,7 +101,9 @@ RESPONSE SCHEMA — follow this exactly:
 }
 
 FIELD CONSTRAINTS:
-- cropIdentified: always present, even if image is unclear
+- multiplePlantsDetected: always present, boolean
+- plantsDetected: array of strings; empty [] when multiplePlantsDetected is false
+- cropIdentified: always present, even if image is unclear; set name to "Unknown Plant" when multiplePlantsDetected is true
 - cropIdentified.growthStage: MUST be exactly one of: Germination | Seedling | Vegetative | Flowering | Fruiting | Mature | Dormant | Unknown
 - aiResult.severity: MUST be exactly one of: Low | Moderate | High
 - aiResult.confidenceScore: integer from 10 to 98 only

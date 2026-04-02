@@ -254,6 +254,19 @@ async def diagnose_plant(req: DiagnoseRequest):
             parsed = parse_json_safe(cleaned)
 
             if parsed:
+                # Multiple plant types detected — return early without diagnosis or DB save
+                if parsed.get("multiplePlantsDetected") is True:
+                    plants_found = parsed.get("plantsDetected", [])
+                    if isinstance(plants_found, list):
+                        plants_found = [str(p) for p in plants_found]
+                    else:
+                        plants_found = []
+                    logger.info(f"Multiple plant types detected: {plants_found}")
+                    return {
+                        "multiplePlantsDetected": True,
+                        "plantsDetected": plants_found,
+                    }
+
                 raw_result = parsed.get("aiResult", parsed)
                 ai_result = _sanitise_ai_result(raw_result)
                 crop_identified = _sanitise_crop(parsed.get("cropIdentified", {}))

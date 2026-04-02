@@ -388,6 +388,26 @@ async function runDiagnose() {
 }
 
 function renderDiagnoseResult(d) {
+  // Multiple plant types detected — prompt re-upload
+  if (d.multiplePlantsDetected) {
+    const list = (d.plantsDetected || []).join(', ') || 'multiple species';
+    return `
+      <div class="card p-5" style="border-color:var(--amber);background:rgba(201,150,58,.07);">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+          <div style="font-size:2rem;">⚠️</div>
+          <div>
+            <div style="font-size:1rem;font-weight:600;color:var(--amber-lt);">Multiple Plant Types Detected</div>
+            <div style="font-size:.85rem;color:var(--parchment);margin-top:3px;">Detected in image: <strong>${list}</strong></div>
+          </div>
+        </div>
+        <div style="font-size:.9rem;color:var(--cream);line-height:1.6;">
+          For an accurate diagnosis, please upload a photo containing <strong>only one plant species</strong> at a time.
+          Make sure the plant fills most of the frame and is clearly in focus.
+        </div>
+      </div>
+    `;
+  }
+
   const ai = d.aiResult || {};
   const crop = d.cropIdentified || {};
   const alts = d.alternatives || [];

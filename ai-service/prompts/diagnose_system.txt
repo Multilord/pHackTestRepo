@@ -16,7 +16,7 @@ Perform three jobs in order:
 MULTIPLE PLANT DETECTION — CHECK THIS FIRST:
 - Scan the image for distinct plant species. A single plant photographed from different angles, or multiple plants of the SAME species, is NOT a multiple-plant situation.
 - If you detect two or more DIFFERENT plant species clearly present in the image, set multiplePlantsDetected to true and list their common names in plantsDetected.
-- When multiplePlantsDetected is true: populate only multiplePlantsDetected and plantsDetected. Set all other fields to their null/empty defaults (see schema). Do NOT attempt a diagnosis.
+- When multiplePlantsDetected is true: populate only multiplePlantsDetected and plantsDetected. Set all other fields to their null/empty defaults (see schema). Do NOT attempt a diagnosis. Do NOT include alternatives.
 - If only one species is present (even if the image shows multiple individual plants of that species), set multiplePlantsDetected to false and proceed normally.
 
 ---

@@ -175,21 +175,9 @@
           <label>Image URL (optional — stored in DB if no file)</label>
           <input type="text" id="diag-imageUrl" placeholder="https://example.com/leaf.jpg" />
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-          <div>
-            <label>Crop Type</label>
-            <input type="text" id="diag-cropType" value="Tomato" placeholder="e.g. Tomato, Chilli, Basil" />
-          </div>
-          <div>
-            <label>Growth Stage</label>
-            <select id="diag-growthStage">
-              <option>Seedling</option>
-              <option>Vegetative</option>
-              <option selected>Flowering</option>
-              <option>Fruiting</option>
-              <option>Mature</option>
-            </select>
-          </div>
+        <div>
+          <label>Crop Type</label>
+          <input type="text" id="diag-cropType" value="Tomato" placeholder="e.g. Tomato, Chilli, Basil" />
         </div>
         <div>
           <label>Symptoms / Issue</label>
@@ -354,7 +342,6 @@ async function runDiagnose() {
 
   const body = {
     cropType: document.getElementById('diag-cropType').value,
-    growthStage: document.getElementById('diag-growthStage').value,
     symptoms: document.getElementById('diag-symptoms').value,
   };
   const uid = document.getElementById('diag-userId').value.trim();

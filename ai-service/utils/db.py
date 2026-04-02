@@ -29,9 +29,18 @@ def get_client() -> AsyncIOMotorClient:
 
 
 def get_db() -> AsyncIOMotorDatabase:
-    global _db
+    global _client, _db
     if _db is None:
         client = get_client()
         db_name = os.getenv("DB_NAME", "homegrow")
         _db = client[db_name]
     return _db
+
+
+def reset_connection():
+    """Force-close the Motor client so the next get_db() creates a fresh connection."""
+    global _client, _db
+    if _client is not None:
+        _client.close()
+    _client = None
+    _db = None

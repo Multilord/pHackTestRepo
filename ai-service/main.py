@@ -60,16 +60,18 @@ async def health_check():
     """Service health check including DB connectivity."""
     from utils.db import get_db
 
+    from utils.db import reset_connection
     db_status = "unknown"
     db_error = None
     try:
         db = get_db()
-        # Motor ping: run a lightweight command
         await db.command("ping")
         db_status = "connected"
     except Exception as e:
         db_status = "error"
         db_error = str(e)[:120]
+        # Reset cached connection so next request gets a fresh client
+        reset_connection()
 
     return {
         "status": "ok",

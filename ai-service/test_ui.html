@@ -422,6 +422,11 @@ function renderDiagnoseResult(d) {
           <div style="font-size:1rem;font-weight:600;">${crop.name}</div>
           ${crop.botanicalName ? `<div style="font-size:.78rem;color:var(--sage);font-style:italic;">${crop.botanicalName}</div>` : ''}
           ${crop.description ? `<div style="font-size:.8rem;color:var(--parchment);margin-top:3px;">${crop.description}</div>` : ''}
+          ${crop.growthStage && crop.growthStage !== 'Unknown' ? `
+          <div style="margin-top:6px;display:flex;align-items:center;gap:6px;">
+            <span style="font-size:.7rem;padding:2px 8px;border-radius:20px;background:var(--leaf);color:var(--lime);">📍 ${crop.growthStage} Stage</span>
+            ${crop.growthStageNote ? `<span style="font-size:.75rem;color:var(--sage);">${crop.growthStageNote}</span>` : ''}
+          </div>` : ''}
         </div>
       </div>` : ''}
 
@@ -429,7 +434,7 @@ function renderDiagnoseResult(d) {
         <div>
           <div style="font-size:.7rem;color:var(--sage);letter-spacing:.05em;margin-bottom:2px;">PRIMARY DIAGNOSIS</div>
           <div style="font-size:1.1rem;font-weight:600;">${ai.problem || 'Unknown'}</div>
-          <div style="font-size:.8rem;color:var(--sage);margin-top:2px;">${d.growthStage} stage</div>
+          <div style="font-size:.8rem;color:var(--sage);margin-top:2px;">${(crop.growthStage && crop.growthStage !== 'Unknown') ? crop.growthStage : d.growthStage} stage</div>
         </div>
         <span style="font-size:.8rem;padding:4px 12px;border-radius:20px;" class="${sevClass}">${ai.severity}</span>
       </div>

@@ -78,6 +78,8 @@ _FALLBACK_CROP = {
     "name": "Unknown Plant",
     "botanicalName": "",
     "description": "Could not identify the crop from the provided image.",
+    "growthStage": "Unknown",
+    "growthStageNote": "",
 }
 
 _FALLBACK_ALTERNATIVES = [
@@ -123,12 +125,29 @@ def _sanitise_ai_result(raw: dict) -> dict:
     }
 
 
+_VALID_GROWTH_STAGES = frozenset({
+    "Germination", "Seedling", "Vegetative", "Flowering",
+    "Fruiting", "Mature", "Dormant", "Unknown",
+})
+
+
 def _sanitise_crop(raw: dict) -> dict:
     """Validate and sanitise crop identification fields."""
+    growth_stage = str(raw.get("growthStage", "Unknown")).strip().capitalize()
+    # Re-capitalise known multi-word stages that .capitalize() would mangle
+    stage_map = {
+        "Germination": "Germination", "Seedling": "Seedling",
+        "Vegetative": "Vegetative", "Flowering": "Flowering",
+        "Fruiting": "Fruiting", "Mature": "Mature",
+        "Dormant": "Dormant", "Unknown": "Unknown",
+    }
+    growth_stage = stage_map.get(growth_stage, "Unknown")
     return {
         "name": str(raw.get("name", "Unknown Plant")),
         "botanicalName": str(raw.get("botanicalName", "")),
         "description": str(raw.get("description", "")),
+        "growthStage": growth_stage,
+        "growthStageNote": str(raw.get("growthStageNote", "")),
     }
 
 

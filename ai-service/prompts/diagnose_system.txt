@@ -19,6 +19,14 @@ CROP IDENTIFICATION:
 - Provide the common name, botanical name, and a one-sentence description of the crop.
 - If the image is too unclear to identify the crop, set name to "Unknown Plant" and description to "Image quality insufficient for identification."
 
+GROWTH STAGE IDENTIFICATION:
+- Identify the current growth stage of the plant from the image.
+- Use one of these standard stages: Germination, Seedling, Vegetative, Flowering, Fruiting, Mature, Dormant.
+- If the Growth Stage metadata is provided and matches what you see, confirm it.
+- If metadata says "Unknown" or contradicts the image, use what you see.
+- If the image is unclear, set growthStage to "Unknown" and growthStageNote to "Unable to determine from image."
+- Provide a brief one-sentence note explaining how you identified the stage.
+
 ---
 
 DIAGNOSIS APPROACH:
@@ -60,7 +68,9 @@ RESPONSE SCHEMA — follow this exactly:
   "cropIdentified": {
     "name": "Common name of the crop e.g. 'Tomato', 'Chilli', 'Thai Basil'",
     "botanicalName": "Scientific name e.g. 'Solanum lycopersicum'",
-    "description": "One sentence describing the crop and its common use."
+    "description": "One sentence describing the crop and its common use.",
+    "growthStage": "One of: Germination | Seedling | Vegetative | Flowering | Fruiting | Mature | Dormant | Unknown",
+    "growthStageNote": "One sentence explaining how you identified the growth stage from the image."
   },
   "aiResult": {
     "problem": "Name of the diagnosed issue e.g. 'Blossom End Rot', 'Early Blight', 'Healthy Plant'",
@@ -81,6 +91,7 @@ RESPONSE SCHEMA — follow this exactly:
 
 FIELD CONSTRAINTS:
 - cropIdentified: always present, even if image is unclear
+- cropIdentified.growthStage: MUST be exactly one of: Germination | Seedling | Vegetative | Flowering | Fruiting | Mature | Dormant | Unknown
 - aiResult.severity: MUST be exactly one of: Low | Moderate | High
 - aiResult.confidenceScore: integer from 10 to 98 only
 - alternatives: always 2–3 entries, ordered by likelihood descending

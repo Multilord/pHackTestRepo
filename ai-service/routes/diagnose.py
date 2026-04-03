@@ -30,6 +30,7 @@ from utils.helpers import (
     extract_base64_data,
     load_prompt,
     parse_json_safe,
+    serialize_doc,
     serialize_list,
     strip_json_fences,
 )
@@ -364,7 +365,7 @@ async def diagnose_plant(req: DiagnoseRequest):
 
 
 # ---------------------------------------------------------------------------
-# GET /api/diagnoses/flagged  (agronomist dashboard)
+# GET /api/diagnoses/flagged  (agronomist dashboard) — must be before /{id}
 # ---------------------------------------------------------------------------
 
 
@@ -380,6 +381,46 @@ async def get_flagged_diagnoses():
     except Exception as e:
         logger.error(f"Failed to fetch flagged diagnoses: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch flagged diagnoses.")
+
+
+# ---------------------------------------------------------------------------
+# GET /api/diagnoses/reviewed  (agronomist dashboard) — must be before /{id}
+# ---------------------------------------------------------------------------
+
+
+@router.get("/diagnoses/reviewed")
+async def get_reviewed_diagnoses():
+    """Return all diagnoses that have been expert-reviewed, newest first."""
+    db = get_db()
+    try:
+        docs = await db.diagnoses.find(
+            {"expertReview": {"$exists": True}}
+        ).sort("reviewedAt", -1).to_list(length=100)
+        return serialize_list(docs)
+    except Exception as e:
+        logger.error(f"Failed to fetch reviewed diagnoses: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch reviewed diagnoses.")
+
+
+# ---------------------------------------------------------------------------
+# GET /api/diagnoses/{diagnosis_id}  (single diagnosis — user view)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/diagnoses/{diagnosis_id}")
+async def get_diagnosis(diagnosis_id: str):
+    """Fetch a single diagnosis by ID including expert review if available."""
+    db = get_db()
+    try:
+        oid = ObjectId(diagnosis_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail=f"Invalid diagnosisId: '{diagnosis_id}'.")
+
+    doc = await db.diagnoses.find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Diagnosis not found.")
+
+    return serialize_doc(doc)
 
 
 # ---------------------------------------------------------------------------

@@ -1,159 +1,114 @@
 """
 utils/helpers.py
-Shared utility functions for the HomeGrow AI Engine.
+Shared utility functions used across routes.
 """
 
 import json
 import logging
+import os
 import re
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from bson import ObjectId
 
 logger = logging.getLogger(__name__)
 
-PROMPTS_DIR = Path(__file__).parent.parent / "prompts"
+PROMPTS_DIR = os.path.join(os.path.dirname(__file__), "..", "prompts")
 
 
-def load_prompt(filename: str) -> str:
-    prompt_path = PROMPTS_DIR / filename
-    try:
-        with open(prompt_path, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-            if not content:
-                raise RuntimeError(f"Prompt file is empty: {filename}")
-            return content
-    except FileNotFoundError:
-        raise RuntimeError(f"Missing prompt file '{filename}'. Expected at: {prompt_path}")
-    except RuntimeError:
-        raise
-    except Exception as e:
-        raise RuntimeError(f"Failed to load prompt '{filename}': {e}")
+# ---------------------------------------------------------------------------
+# JSON helpers
+# ---------------------------------------------------------------------------
 
 
 def strip_json_fences(text: str) -> str:
+    """Remove markdown code fences (```json ... ```) from AI responses."""
     text = text.strip()
-    text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\n?```\s*$", "", text)
-    text = re.sub(r"^json\s*(?=\{)", "", text, flags=re.IGNORECASE)
+    # Remove ```json or ``` fences
+    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s*```$", "", text)
     return text.strip()
 
 
-def parse_json_safe(text: str) -> Optional[dict]:
-    if not text:
-        logger.warning("parse_json_safe received empty string.")
+def parse_json_safe(text: str) -> dict | list | None:
+    """Parse JSON without raising — returns None on failure."""
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, TypeError):
         return None
 
-    text = text.replace("\\'", "'")
 
-    def _try_parse(s: str) -> Optional[dict]:
-        try:
-            result = json.loads(s)
-            if isinstance(result, dict):
-                return result
-        except json.JSONDecodeError:
-            pass
-        return None
-
-    result = _try_parse(text)
-    if result:
-        return result
-
-    cleaned = strip_json_fences(text)
-    result = _try_parse(cleaned)
-    if result:
-        return result
-
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if match:
-        result = _try_parse(match.group(0))
-        if result:
-            logger.info("Recovered JSON via substring extraction.")
-            return result
-
-    # Attempt 4: response was truncated — extract whatever top-level keys completed
-    partial = _extract_partial_json(text)
-    if partial:
-        logger.warning("Recovered partial JSON from truncated response.")
-        return partial
-
-    logger.warning(f"Failed to parse JSON. First 300 chars: {text[:300]!r}")
-    return None
+# ---------------------------------------------------------------------------
+# Image helpers
+# ---------------------------------------------------------------------------
 
 
-def _extract_partial_json(text: str) -> Optional[dict]:
+def extract_base64_data(image_str: str) -> tuple[str, str]:
     """
-    Last-resort recovery for truncated Gemini responses.
-    Walks the text character by character to extract all fully-formed
-    top-level key:value pairs from an incomplete JSON object.
+    Accept either:
+      - a raw base64 string → returns ("image/jpeg", base64_str)
+      - a data URL like "data:image/png;base64,<data>" → returns ("image/png", base64_str)
     """
-    start = text.find("{")
-    if start == -1:
-        return None
-
-    result = {}
-    # Match each top-level key and try to decode its value
-    key_re = re.compile(r'"(\w+)"\s*:\s*', re.DOTALL)
-    for m in key_re.finditer(text, start + 1):
-        key = m.group(1)
-        val_start = m.end()
-        first_char = text[val_start:val_start + 1].strip()
-        if not first_char:
-            continue
-        # Find the natural end of this value by trying progressively from max to min
-        for end in range(len(text), val_start, -1):
-            snippet = text[val_start:end].strip().rstrip(",").strip()
-            if not snippet:
-                continue
-            try:
-                val = json.loads(snippet)
-                result[key] = val
-                break
-            except (json.JSONDecodeError, ValueError):
-                continue
-    return result if result else None
-
-
-def clamp_confidence(value: int) -> int:
-    """Clamp confidence score to [10, 98]."""
-    return max(10, min(98, value))
-
-
-def extract_base64_data(image_str: str) -> Tuple[str, str]:
     image_str = image_str.strip()
-    data_url_re = re.compile(
-        r"^data:(image/(?:jpeg|jpg|png|gif|webp));base64,(.+)$",
-        re.DOTALL | re.IGNORECASE,
-    )
-    match = data_url_re.match(image_str)
-    if match:
-        raw_mime = match.group(1).lower()
-        media_type = "image/jpeg" if raw_mime == "image/jpg" else raw_mime
-        return media_type, match.group(2).strip()
+    if image_str.startswith("data:"):
+        match = re.match(r"data:([^;]+);base64,(.+)", image_str, re.DOTALL)
+        if not match:
+            raise ValueError("Malformed data URL — expected data:<mime>;base64,<data>")
+        return match.group(1), match.group(2).strip()
+    # Raw base64 — assume JPEG
     return "image/jpeg", image_str
 
 
-def _serialize_value(v: Any) -> Any:
+# ---------------------------------------------------------------------------
+# Numeric helpers
+# ---------------------------------------------------------------------------
+
+
+def clamp_confidence(value: int, lo: int = 1, hi: int = 99) -> int:
+    """Clamp a confidence score to [lo, hi]."""
+    return max(lo, min(hi, value))
+
+
+# ---------------------------------------------------------------------------
+# Prompt loader
+# ---------------------------------------------------------------------------
+
+
+def load_prompt(filename: str) -> str:
+    """Load a .txt prompt file from the prompts/ directory."""
+    path = os.path.join(PROMPTS_DIR, filename)
+    if not os.path.isfile(path):
+        raise RuntimeError(f"Prompt file not found: {path}")
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read().strip()
+
+
+# ---------------------------------------------------------------------------
+# MongoDB serialisation helpers
+# ---------------------------------------------------------------------------
+
+
+def _serialise_value(v: Any) -> Any:
     if isinstance(v, ObjectId):
         return str(v)
-    if isinstance(v, datetime):
+    if hasattr(v, "isoformat"):       # datetime
         return v.isoformat()
     if isinstance(v, dict):
-        return serialize_doc(v)
+        return {k: _serialise_value(val) for k, val in v.items()}
     if isinstance(v, list):
-        return [_serialize_value(i) for i in v]
+        return [_serialise_value(i) for i in v]
     return v
 
 
-def serialize_doc(doc: Optional[dict]) -> Optional[dict]:
-    """Recursively convert ObjectId/datetime values to JSON-safe types."""
-    if doc is None:
-        return None
-    return {k: _serialize_value(v) for k, v in doc.items()}
+def serialize_doc(doc: dict) -> dict:
+    """Convert a MongoDB document to a JSON-safe dict (ObjectId → str, datetime → ISO)."""
+    result = {}
+    for k, v in doc.items():
+        key = "id" if k == "_id" else k
+        result[key] = _serialise_value(v)
+    return result
 
 
-def serialize_list(docs: list) -> list:
-    """Serialize a list of MongoDB documents."""
+def serialize_list(docs: list[dict]) -> list[dict]:
+    """Serialise a list of MongoDB documents."""
     return [serialize_doc(d) for d in docs]

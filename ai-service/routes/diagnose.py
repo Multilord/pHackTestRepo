@@ -1,11 +1,10 @@
 """
 routes/diagnose.py
-POST /api/diagnose
+POST /api/diagnose               — analyse a plant image with Gemini Vision
+POST /api/diagnoses/{id}/review  — agronomist submits expert review
+GET  /api/diagnoses/flagged      — list all flagged diagnoses (agronomist only)
 
 Architecture: FastAPI -> Gemini Vision AI -> MongoDB Atlas
-- Analyses plant image with Gemini Vision
-- Saves diagnosis to MongoDB diagnoses collection
-- Returns the saved diagnosis document
 """
 
 import base64
@@ -28,6 +27,7 @@ from utils.helpers import (
     extract_base64_data,
     load_prompt,
     parse_json_safe,
+    serialize_list,
     strip_json_fences,
 )
 
@@ -42,7 +42,7 @@ _VALID_SEVERITIES = frozenset({"Low", "Moderate", "High"})
 
 
 # ---------------------------------------------------------------------------
-# Request model
+# Request models
 # ---------------------------------------------------------------------------
 
 
@@ -58,8 +58,15 @@ class DiagnoseRequest(BaseModel):
     symptoms: Optional[str] = Field(None, description="Reported symptom description")
 
 
+class ReviewRequest(BaseModel):
+    reviewedBy: Optional[str] = Field(None, description="Agronomist user _id")
+    corrected_diagnosis: dict = Field(..., description="Corrected diagnosis fields")
+    advice: Optional[str] = Field(None, description="Expert advice for the user")
+    aiWasCorrect: Optional[bool] = Field(None, description="Was the AI diagnosis correct?")
+
+
 # ---------------------------------------------------------------------------
-# Fallback diagnosis (when AI is unavailable or response is unparseable)
+# Fallback values
 # ---------------------------------------------------------------------------
 
 
@@ -99,12 +106,11 @@ _FALLBACK_ALTERNATIVES = [
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers
+# Internal sanitisers
 # ---------------------------------------------------------------------------
 
 
 def _sanitise_ai_result(raw: dict) -> dict:
-    """Validate and sanitise the primary AI result fields."""
     severity = str(raw.get("severity", "Low")).strip().capitalize()
     if severity not in _VALID_SEVERITIES:
         logger.warning(f"Invalid severity '{severity}'. Defaulting to 'Low'.")
@@ -132,9 +138,7 @@ _VALID_GROWTH_STAGES = frozenset({
 
 
 def _sanitise_crop(raw: dict) -> dict:
-    """Validate and sanitise crop identification fields."""
     growth_stage = str(raw.get("growthStage", "Unknown")).strip().capitalize()
-    # Re-capitalise known multi-word stages that .capitalize() would mangle
     stage_map = {
         "Germination": "Germination", "Seedling": "Seedling",
         "Vegetative": "Vegetative", "Flowering": "Flowering",
@@ -152,7 +156,6 @@ def _sanitise_crop(raw: dict) -> dict:
 
 
 def _sanitise_alternatives(raw_list: list) -> list:
-    """Validate and sanitise alternative diagnoses."""
     if not isinstance(raw_list, list):
         return _FALLBACK_ALTERNATIVES
     result = []
@@ -173,26 +176,21 @@ def _sanitise_alternatives(raw_list: list) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Route
+# POST /api/diagnose
 # ---------------------------------------------------------------------------
 
 
 @router.post("/diagnose")
 async def diagnose_plant(req: DiagnoseRequest):
-    """
-    Analyse a plant image using Gemini Vision.
-    Saves the diagnosis to MongoDB diagnoses collection and returns the result.
-    """
+    """Analyse a plant image using Gemini Vision and save to MongoDB."""
     db = get_db()
 
-    # Load prompt
     try:
         system_prompt = load_prompt("diagnose_system.txt")
     except RuntimeError as e:
         logger.error(f"Could not load diagnose prompt: {e}")
         raise HTTPException(status_code=500, detail="AI service configuration error: missing prompt file.")
 
-    # Validate: need at least an image or imageUrl
     if not req.image and not req.imageUrl:
         raise HTTPException(status_code=400, detail="Provide either 'image' (base64) or 'imageUrl'.")
 
@@ -200,7 +198,6 @@ async def diagnose_plant(req: DiagnoseRequest):
     crop_identified = None
     alternatives = None
 
-    # Run AI analysis if base64 image is provided
     if req.image and req.image.strip():
         try:
             media_type, b64_data = extract_base64_data(req.image)
@@ -223,16 +220,11 @@ async def diagnose_plant(req: DiagnoseRequest):
         )
 
         try:
-            logger.info(
-                f"Calling Gemini ({GEMINI_MODEL}) for diagnosis. "
-                f"Crop: {req.cropType or 'Unknown'}, Stage: {req.growthStage or 'Unknown'}"
-            )
+            logger.info(f"Calling Gemini ({GEMINI_MODEL}). Crop: {req.cropType or 'Unknown'}")
             client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
             response = client.models.generate_content(
                 model=GEMINI_MODEL,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                ),
+                config=types.GenerateContentConfig(system_instruction=system_prompt),
                 contents=[
                     types.Part.from_bytes(data=image_bytes, mime_type=media_type),
                     user_message,
@@ -254,29 +246,24 @@ async def diagnose_plant(req: DiagnoseRequest):
             parsed = parse_json_safe(cleaned)
 
             if parsed:
-                # Multiple plant types detected — return early without diagnosis or DB save
                 if parsed.get("multiplePlantsDetected") is True:
                     plants_found = parsed.get("plantsDetected", [])
                     if isinstance(plants_found, list):
                         plants_found = [str(p) for p in plants_found]
                     else:
                         plants_found = []
-                    logger.info(f"Multiple plant types detected: {plants_found}")
-                    return {
-                        "multiplePlantsDetected": True,
-                        "plantsDetected": plants_found,
-                    }
+                    logger.info(f"Multiple plants detected: {plants_found}")
+                    return {"multiplePlantsDetected": True, "plantsDetected": plants_found}
 
                 raw_result = parsed.get("aiResult", parsed)
                 ai_result = _sanitise_ai_result(raw_result)
                 crop_identified = _sanitise_crop(parsed.get("cropIdentified", {}))
                 alternatives = _sanitise_alternatives(parsed.get("alternatives", []))
             else:
-                logger.warning(f"Unparseable AI response. Raw (first 300): {raw_text[:300]!r}")
+                logger.warning(f"Unparseable AI response (first 300): {raw_text[:300]!r}")
                 ai_result = _FALLBACK_AI_RESULT.copy()
     else:
-        # No base64 image — use fallback (imageUrl-only mode, no AI analysis)
-        logger.info("No base64 image provided. Storing imageUrl without AI analysis.")
+        logger.info("No base64 image — storing imageUrl without AI analysis.")
         ai_result = _FALLBACK_AI_RESULT.copy()
 
     if crop_identified is None:
@@ -286,13 +273,12 @@ async def diagnose_plant(req: DiagnoseRequest):
 
     flagged_for_review = ai_result["confidenceScore"] < 75
 
-    # Build MongoDB document
     user_oid = None
     if req.userId:
         try:
             user_oid = ObjectId(req.userId)
         except InvalidId:
-            logger.warning(f"Invalid userId '{req.userId}' — saving diagnosis without userId.")
+            logger.warning(f"Invalid userId '{req.userId}' — saving without userId.")
 
     diagnosis_doc = {
         "cropType": req.cropType or "Unknown",
@@ -308,15 +294,12 @@ async def diagnose_plant(req: DiagnoseRequest):
     if user_oid is not None:
         diagnosis_doc["userId"] = user_oid
 
-    # Save to MongoDB
     try:
         insert_result = await db.diagnoses.insert_one(diagnosis_doc)
         diagnosis_id = str(insert_result.inserted_id)
         logger.info(
             f"Diagnosis saved. _id={diagnosis_id}, "
-            f"problem='{ai_result['problem']}', "
-            f"severity={ai_result['severity']}, "
-            f"confidence={ai_result['confidenceScore']}, "
+            f"problem='{ai_result['problem']}', confidence={ai_result['confidenceScore']}, "
             f"flagged={flagged_for_review}"
         )
     except Exception as e:
@@ -335,3 +318,74 @@ async def diagnose_plant(req: DiagnoseRequest):
         "flaggedForReview": flagged_for_review,
         "createdAt": diagnosis_doc["createdAt"].isoformat(),
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /api/diagnoses/flagged  (agronomist dashboard)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/diagnoses/flagged")
+async def get_flagged_diagnoses():
+    """Return all diagnoses flagged for expert review, newest first."""
+    db = get_db()
+    try:
+        docs = await db.diagnoses.find(
+            {"flaggedForReview": True}
+        ).sort("createdAt", -1).to_list(length=100)
+        return serialize_list(docs)
+    except Exception as e:
+        logger.error(f"Failed to fetch flagged diagnoses: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch flagged diagnoses.")
+
+
+# ---------------------------------------------------------------------------
+# POST /api/diagnoses/{diagnosis_id}/review  (agronomist submits review)
+# ---------------------------------------------------------------------------
+
+
+@router.post("/diagnoses/{diagnosis_id}/review")
+async def submit_review(diagnosis_id: str, req: ReviewRequest):
+    """Agronomist submits an expert review for a flagged diagnosis."""
+    db = get_db()
+
+    try:
+        oid = ObjectId(diagnosis_id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail=f"Invalid diagnosisId: '{diagnosis_id}'.")
+
+    diagnosis = await db.diagnoses.find_one({"_id": oid})
+    if not diagnosis:
+        raise HTTPException(status_code=404, detail="Diagnosis not found.")
+
+    reviewer_oid = None
+    if req.reviewedBy:
+        try:
+            reviewer_oid = ObjectId(req.reviewedBy)
+        except InvalidId:
+            logger.warning(f"Invalid reviewedBy '{req.reviewedBy}' — storing as string.")
+
+    review_doc = {
+        "correctedDiagnosis": req.corrected_diagnosis,
+        "advice": req.advice,
+        "aiWasCorrect": req.aiWasCorrect,
+        "reviewedBy": reviewer_oid or req.reviewedBy,
+        "reviewedAt": datetime.now(timezone.utc),
+    }
+
+    try:
+        await db.diagnoses.update_one(
+            {"_id": oid},
+            {
+                "$set": {
+                    "expertReview": review_doc,
+                    "flaggedForReview": False,   # clear flag after review
+                    "reviewedAt": datetime.now(timezone.utc),
+                }
+            },
+        )
+        logger.info(f"Review submitted for diagnosis _id={diagnosis_id}")
+        return {"status": "ok", "diagnosisId": diagnosis_id}
+    except Exception as e:
+        logger.error(f"Failed to save review: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save review.")

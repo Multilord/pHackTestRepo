@@ -1,12 +1,16 @@
 """
 utils/db.py
-Async MongoDB connection for the HomeGrow AI service.
-Uses Motor (AsyncIO) for non-blocking database operations.
+MongoDB Atlas async connection using Motor.
+
+Usage:
+    from utils.db import get_db
+    db = get_db()
+    docs = await db.plants.find().to_list(100)
 """
 
 import logging
 import os
-import certifi
+
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
@@ -18,29 +22,25 @@ _client: AsyncIOMotorClient | None = None
 _db: AsyncIOMotorDatabase | None = None
 
 
-def get_client() -> AsyncIOMotorClient:
+async def connect_db() -> None:
+    global _client, _db
+    uri = os.getenv("MONGODB_URI")
+    db_name = os.getenv("MONGODB_DB", "homegrow")
+    if not uri:
+        raise RuntimeError("MONGODB_URI environment variable is not set.")
+    _client = AsyncIOMotorClient(uri)
+    _db = _client[db_name]
+    logger.info(f"Connected to MongoDB database: '{db_name}'")
+
+
+async def close_db() -> None:
     global _client
-    if _client is None:
-        uri = os.getenv("MONGODB_URI")
-        if not uri:
-            raise RuntimeError("MONGODB_URI environment variable is not set.")
-        _client = AsyncIOMotorClient(uri, tlsCAFile=certifi.where())
-    return _client
+    if _client:
+        _client.close()
+        _client = None
 
 
 def get_db() -> AsyncIOMotorDatabase:
-    global _client, _db
     if _db is None:
-        client = get_client()
-        db_name = os.getenv("DB_NAME", "homegrow")
-        _db = client[db_name]
+        raise RuntimeError("Database is not connected. Call connect_db() first.")
     return _db
-
-
-def reset_connection():
-    """Force-close the Motor client so the next get_db() creates a fresh connection."""
-    global _client, _db
-    if _client is not None:
-        _client.close()
-    _client = None
-    _db = None

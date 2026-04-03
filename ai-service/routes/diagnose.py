@@ -298,10 +298,17 @@ async def diagnose_plant(req: DiagnoseRequest):
 
     flagged_for_review = ai_result["confidenceScore"] < 75
 
+    # Resolve user info — store denormalised so agronomist always sees name/email
     user_oid = None
+    user_name = None
+    user_email = None
     if req.userId:
         try:
             user_oid = ObjectId(req.userId)
+            user_doc = await db.users.find_one({"_id": user_oid})
+            if user_doc:
+                user_name = user_doc.get("name")
+                user_email = user_doc.get("email")
         except InvalidId:
             logger.warning(f"Invalid userId '{req.userId}' — saving without userId.")
 
@@ -323,6 +330,10 @@ async def diagnose_plant(req: DiagnoseRequest):
     }
     if user_oid is not None:
         diagnosis_doc["userId"] = user_oid
+    if user_name:
+        diagnosis_doc["userName"] = user_name
+    if user_email:
+        diagnosis_doc["userEmail"] = user_email
 
     try:
         insert_result = await db.diagnoses.insert_one(diagnosis_doc)
@@ -347,6 +358,8 @@ async def diagnose_plant(req: DiagnoseRequest):
         "alternatives": alternatives,
         "flaggedForReview": flagged_for_review,
         "createdAt": diagnosis_doc["createdAt"].isoformat(),
+        "userName": user_name,
+        "userEmail": user_email,
     }
 
 
@@ -357,28 +370,13 @@ async def diagnose_plant(req: DiagnoseRequest):
 
 @router.get("/diagnoses/flagged")
 async def get_flagged_diagnoses():
-    """Return all diagnoses flagged for expert review, newest first, enriched with user info."""
+    """Return all diagnoses flagged for expert review, newest first."""
     db = get_db()
     try:
         docs = await db.diagnoses.find(
             {"flaggedForReview": True}
         ).sort("createdAt", -1).to_list(length=100)
-
-        # Enrich each diagnosis with user name/email
-        enriched = []
-        for doc in docs:
-            serialised = serialize_list([doc])[0]
-            if doc.get("userId"):
-                try:
-                    user = await db.users.find_one({"_id": doc["userId"]})
-                    if user:
-                        serialised["userName"] = user.get("name", "Unknown User")
-                        serialised["userEmail"] = user.get("email", "")
-                except Exception:
-                    pass
-            enriched.append(serialised)
-
-        return enriched
+        return serialize_list(docs)
     except Exception as e:
         logger.error(f"Failed to fetch flagged diagnoses: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch flagged diagnoses.")

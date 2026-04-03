@@ -8,24 +8,24 @@ Architecture: FastAPI -> MongoDB Atlas -> JWT
 - Returns JWT token + user info the frontend stores in localStorage
 """
 
+import hashlib
 import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+
+import bcrypt
 import jwt
 from bson import ObjectId
 from bson.errors import InvalidId
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException
-from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 from utils.db import get_db
-import hashlib
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto",  bcrypt__rounds=10 )
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change-this-secret-in-production")
 JWT_ALGORITHM = "HS256"
@@ -77,9 +77,14 @@ def _auth_response(user: dict, token: str) -> dict:
         "userId": str(user["_id"]),
     }
 
-def hash_password(password: str):
-    hashed = hashlib.sha256(password.encode()).hexdigest()
-    return pwd_context.hash(hashed)
+def hash_password(password: str) -> str:
+    sha = hashlib.sha256(password.encode()).hexdigest()
+    return bcrypt.hashpw(sha.encode(), bcrypt.gensalt(rounds=10)).decode()
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    sha = hashlib.sha256(plain.encode()).hexdigest()
+    return bcrypt.checkpw(sha.encode(), hashed.encode())
 
 
 # ---------------------------------------------------------------------------
@@ -146,9 +151,8 @@ async def login(req: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-    # Verify password (must match hash_password: sha256 then bcrypt)
-    hashed_input = hashlib.sha256(req.password.encode()).hexdigest()
-    if not pwd_context.verify(hashed_input, user["password"]):
+    # Verify password
+    if not verify_password(req.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
     token = _create_token(str(user["_id"]), user["role"])

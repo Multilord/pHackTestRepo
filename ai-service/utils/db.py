@@ -41,6 +41,14 @@ async def close_db() -> None:
 
 
 def get_db() -> AsyncIOMotorDatabase:
+    global _client, _db
     if _db is None:
-        raise RuntimeError("Database is not connected. Call connect_db() first.")
+        # Lazy init for serverless environments where startup events may not fire
+        uri = os.getenv("MONGODB_URI")
+        db_name = os.getenv("MONGODB_DB", "homegrow")
+        if not uri:
+            raise RuntimeError("MONGODB_URI environment variable is not set.")
+        _client = AsyncIOMotorClient(uri)
+        _db = _client[db_name]
+        logger.info(f"Lazy-connected to MongoDB database: '{db_name}'")
     return _db

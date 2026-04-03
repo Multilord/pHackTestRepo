@@ -7,7 +7,7 @@ import json
 import logging
 import os
 import re
-from typing import Any
+from typing import Any, Optional, Union
 
 from bson import ObjectId
 
@@ -30,7 +30,7 @@ def strip_json_fences(text: str) -> str:
     return text.strip()
 
 
-def parse_json_safe(text: str) -> dict | list | None:
+def parse_json_safe(text: str) -> Optional[Union[dict, list]]:
     """Parse JSON without raising — returns None on failure."""
     try:
         return json.loads(text)

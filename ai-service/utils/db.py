@@ -10,6 +10,7 @@ Usage:
 
 import logging
 import os
+from typing import Optional
 
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
@@ -18,8 +19,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
-_client: AsyncIOMotorClient | None = None
-_db: AsyncIOMotorDatabase | None = None
+_client: Optional[AsyncIOMotorClient] = None
+_db: Optional[AsyncIOMotorDatabase] = None
 
 
 async def connect_db() -> None:

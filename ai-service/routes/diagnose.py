@@ -8,10 +8,13 @@ Architecture: FastAPI -> Gemini Vision AI -> MongoDB Atlas
 """
 
 import base64
+import io
 import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional
+
+from PIL import Image
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -176,6 +179,27 @@ def _sanitise_alternatives(raw_list: list) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _compress_image(image_bytes: bytes, max_size: tuple = (800, 600), quality: int = 70) -> str:
+    """Resize and compress image, return as base64 data URL for storage."""
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img.thumbnail(max_size, Image.LANCZOS)
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        output = io.BytesIO()
+        img.save(output, format="JPEG", quality=quality, optimize=True)
+        b64 = base64.b64encode(output.getvalue()).decode()
+        return f"data:image/jpeg;base64,{b64}"
+    except Exception as e:
+        logger.warning(f"Image compression failed: {e}")
+        return None
+
+
+# ---------------------------------------------------------------------------
 # POST /api/diagnose
 # ---------------------------------------------------------------------------
 
@@ -197,6 +221,7 @@ async def diagnose_plant(req: DiagnoseRequest):
     ai_result = None
     crop_identified = None
     alternatives = None
+    image_bytes = None
 
     if req.image and req.image.strip():
         try:
@@ -280,11 +305,16 @@ async def diagnose_plant(req: DiagnoseRequest):
         except InvalidId:
             logger.warning(f"Invalid userId '{req.userId}' — saving without userId.")
 
+    # Compress and store image so agronomist can view it during review
+    stored_image_url = req.imageUrl or None
+    if image_bytes:
+        stored_image_url = _compress_image(image_bytes) or stored_image_url
+
     diagnosis_doc = {
         "cropType": req.cropType or "Unknown",
         "growthStage": req.growthStage or "Unknown",
         "issue": req.symptoms or "None reported",
-        "imageUrl": req.imageUrl or None,
+        "imageUrl": stored_image_url,
         "cropIdentified": crop_identified,
         "aiResult": ai_result,
         "alternatives": alternatives,
@@ -327,13 +357,28 @@ async def diagnose_plant(req: DiagnoseRequest):
 
 @router.get("/diagnoses/flagged")
 async def get_flagged_diagnoses():
-    """Return all diagnoses flagged for expert review, newest first."""
+    """Return all diagnoses flagged for expert review, newest first, enriched with user info."""
     db = get_db()
     try:
         docs = await db.diagnoses.find(
             {"flaggedForReview": True}
         ).sort("createdAt", -1).to_list(length=100)
-        return serialize_list(docs)
+
+        # Enrich each diagnosis with user name/email
+        enriched = []
+        for doc in docs:
+            serialised = serialize_list([doc])[0]
+            if doc.get("userId"):
+                try:
+                    user = await db.users.find_one({"_id": doc["userId"]})
+                    if user:
+                        serialised["userName"] = user.get("name", "Unknown User")
+                        serialised["userEmail"] = user.get("email", "")
+                except Exception:
+                    pass
+            enriched.append(serialised)
+
+        return enriched
     except Exception as e:
         logger.error(f"Failed to fetch flagged diagnoses: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch flagged diagnoses.")

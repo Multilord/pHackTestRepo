@@ -12,6 +12,7 @@ import logging
 import os
 from typing import Optional
 
+import certifi
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
@@ -29,7 +30,7 @@ async def connect_db() -> None:
     db_name = os.getenv("MONGODB_DB", "homegrow")
     if not uri:
         raise RuntimeError("MONGODB_URI environment variable is not set.")
-    _client = AsyncIOMotorClient(uri, tlsAllowInvalidCertificates=True)
+    _client = AsyncIOMotorClient(uri, tlsCAFile=certifi.where())
     _db = _client[db_name]
     logger.info(f"Connected to MongoDB database: '{db_name}'")
 
@@ -49,7 +50,7 @@ def get_db() -> AsyncIOMotorDatabase:
         db_name = os.getenv("MONGODB_DB", "homegrow")
         if not uri:
             raise RuntimeError("MONGODB_URI environment variable is not set.")
-        _client = AsyncIOMotorClient(uri, tlsAllowInvalidCertificates=True)
+        _client = AsyncIOMotorClient(uri, tlsCAFile=certifi.where())
         _db = _client[db_name]
         logger.info(f"Lazy-connected to MongoDB database: '{db_name}'")
     return _db

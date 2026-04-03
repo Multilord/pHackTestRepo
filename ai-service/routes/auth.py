@@ -12,7 +12,6 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-
 import jwt
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -21,11 +20,12 @@ from fastapi import APIRouter, HTTPException
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 from utils.db import get_db
+import hashlib
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto",  bcrypt__rounds=10 )
 
 JWT_SECRET = os.getenv("JWT_SECRET", "change-this-secret-in-production")
 JWT_ALGORITHM = "HS256"
@@ -77,6 +77,10 @@ def _auth_response(user: dict, token: str) -> dict:
         "userId": str(user["_id"]),
     }
 
+def hash_password(password: str):
+    hashed = hashlib.sha256(password.encode()).hexdigest()
+    return pwd_context.hash(hashed)
+
 
 # ---------------------------------------------------------------------------
 # Routes
@@ -102,13 +106,11 @@ async def register(req: RegisterRequest):
     if existing:
         raise HTTPException(status_code=409, detail="An account with this email already exists.")
     
-    password = req.password[:72] 
-
     # Build document
     doc = {
         "name": req.name.strip(),
         "email": req.email.lower().strip(), 
-        "password": pwd_context.hash(password),
+        "password": hash_password(req.password),
         "role": req.role,
         "createdAt": datetime.now(timezone.utc),
     }
@@ -144,8 +146,9 @@ async def login(req: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-    # Verify password
-    if not pwd_context.verify(req.password, user["password"]):
+    # Verify password (must match hash_password: sha256 then bcrypt)
+    hashed_input = hashlib.sha256(req.password.encode()).hexdigest()
+    if not pwd_context.verify(hashed_input, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
 
     token = _create_token(str(user["_id"]), user["role"])

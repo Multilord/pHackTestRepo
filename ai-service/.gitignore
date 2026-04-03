@@ -1,0 +1,18 @@
+# Environment variables - NEVER commit these
+.env
+.env.local
+.env.*.local
+
+# Virtual environments
+venv/
+venv_new/
+env/
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Logs
+*.log
